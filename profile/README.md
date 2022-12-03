@@ -1,6 +1,6 @@
 [![Twitter Badge](https://img.shields.io/badge/Twitter-Profile-informational?style=flat&logo=twitter&logoColor=white&color=1CA2F1)](https://twitter.com/SciML_Org)
 [![LinkedIn Badge](https://img.shields.io/badge/LinkedIn-Profile-informational?style=flat&logo=linkedin&logoColor=white&color=0D76A8)](https://www.linkedin.com/company/82095912/admin/)
-[![Youtube Badge](https://img.shields.io/youtube/channel/views/UCugBGdUbn6PeH03iPZtr-JQ?style=social)](https://www.youtube.com/@TheJuliaLanguage)
+[![Youtube Badge](https://img.shields.io/youtube/channel/views/UC9IuUwwE2xdjQUT_LMLONoA?style=social)](https://www.youtube.com/@TheJuliaLanguage)
 
 **Websites**: [Organization Website](https://sciml.ai/) | [Documentation](https://docs.sciml.ai/Overview/stable/)
 

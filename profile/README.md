@@ -22,7 +22,7 @@ features many of the highest performance and parallel implementations one can fi
 * Want to get started running some code? Check out the [Getting Started tutorials](https://docs.sciml.ai/Overview/stable/getting_started/getting_started/).
 * What is SciML? Check out our [Overview](https://docs.sciml.ai/Overview/stable/overview/).
 * Want to see some cool end-to-end examples? Check out the [SciML Showcase](https://docs.sciml.ai/Overview/dev/showcase/showcase/).
-* Want to learn more about how SciML does scientific machine learning? Check out the [SciMLBook from MIT's 18.337 graduate course](https://book.sciml.ai/).
+* Want to learn more about how SciML does scientific machine learning? Check out the [SciML Book (from MIT's 18.337 graduate course)](https://book.sciml.ai/).
 * Curious about our performance claims? Check out [the SciML Open Benchmarks](https://benchmarks.sciml.ai/dev/).
 * Want to chat with someone? Check out [our chat room](https://julialang.zulipchat.com/#narrow/stream/279055-sciml-bridged) and [forums](https://discourse.julialang.org/).
 * Want to see our code? Check out [the SciML Github organization](https://github.com/SciML).

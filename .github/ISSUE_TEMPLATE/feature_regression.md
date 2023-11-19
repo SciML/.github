@@ -1,7 +1,7 @@
 ---
 name: Feature regression
 about: Create a report to tell us about a feature regression, i.e. new changes broke something or resulted in decreased performance
-title: '[REGRESSION]: '
+title: ''
 labels: 'regression'
 assignees: ''
 

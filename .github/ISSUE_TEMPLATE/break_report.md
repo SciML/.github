@@ -1,8 +1,8 @@
 ---
-name: Break report
-about: Create a report to tell us new changes broke something
-title: ''
-labels: 'break'
+name: Feature regression
+about: Create a report to tell us about a feature regression, i.e. new changes broke something or resulted in decreased performance
+title: '[REGRESSION]: '
+labels: 'regression'
 assignees: ''
 
 ---

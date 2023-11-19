@@ -17,6 +17,9 @@ Fixes ...
 - [] The fix was done in a way that does not break public API
 - [] All documentation related to the fix was updated
 - [] All downstream repositories which were effected by the bug were updated
+- [] The new code follows the
+  [contributor guidelines](https://github.com/SciML/.github/blob/master/CONTRIBUTING.md), in particular the [ScioML Style Guide](https://github.com/SciML/SciMLStyle) and
+  [COLPRAC](https://github.com/SciML/COLPRAC).
 
 **Additional context**
 

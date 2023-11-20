@@ -1,5 +1,5 @@
 ---
-name: New Algorithm
+name: New algorithm
 about: Suggest an algorithm
 title: ''
 labels: 'new algorithm'

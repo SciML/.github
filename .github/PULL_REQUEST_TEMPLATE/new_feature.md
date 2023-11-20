@@ -1,12 +1,3 @@
----
-name: New feature
-about: Create a pull request for a new feature
-title: ''
-labels: 'new feature'
-assignees: ''
-
----
-
 **What feature report was addressed?**
 
 Fixes ...

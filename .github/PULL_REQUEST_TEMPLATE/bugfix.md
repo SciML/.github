@@ -1,12 +1,3 @@
----
-name: Bug fix
-about: Create a pull request for a bugfix
-title: ''
-labels: 'bug'
-assignees: ''
-
----
-
 **What bug was fixed? 🐞**
 
 Fixes ...

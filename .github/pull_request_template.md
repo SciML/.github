@@ -1,7 +1,13 @@
-Click the `Preview` tab and select a PR template:
+## Checklist
 
-- [Bug fix](?expand=1&template=bugfix.md) : Create a pull request for a bugfix
-- [Documentation fix](?expand=1&template=documentation_fix.md) : Create a pull request which fixes some part of the documentation or improves clarity
-- [Performance improvement](?expand=1&template=performance.md) : Create a pull request which improves package performance
-- [New feature](?expand=1&template=new_feature.md) : Create a pull request for a new feature
-- [New documentation tutorial or example](?expand=1&template=new_tutorial.md) : Create a pull request which adds a new documentation tutorial or example
+- [] Appropriate tests were added
+- [] Any code changes were done in a way that does not break public API
+- [] All documentation related to code changes were updated
+- [] The new code follows the
+  [contributor guidelines](https://github.com/SciML/.github/blob/master/CONTRIBUTING.md), in particular the [ScioML Style Guide](https://github.com/SciML/SciMLStyle) and
+  [COLPRAC](https://github.com/SciML/COLPRAC).
+- [] Any new documentation only uses public API
+  
+## Additional context
+
+Add any other context about the problem here.

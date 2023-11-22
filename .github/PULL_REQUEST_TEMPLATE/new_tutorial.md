@@ -1,12 +1,3 @@
----
-name: New documentation tutorial or example
-about: Create a pull request which adds a new documentation tutorial or example
-title: ''
-labels: 'new tutorial'
-assignees: ''
-
----
-
 **Who is the audience of the example or tutorial?**
 
 **Checklist**

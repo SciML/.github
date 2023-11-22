@@ -1,12 +1,3 @@
----
-name: Performance improvement
-about: Create a pull request which improves package performance
-title: ''
-labels: 'performance'
-assignees: ''
-
----
-
 **What bug was fixed? 🐞**
 
 Fixes ...

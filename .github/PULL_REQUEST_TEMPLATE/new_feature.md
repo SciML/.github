@@ -8,7 +8,7 @@ Fixes ...
 - [] The new feature was added in a way that does not break public API
 - [] New documentation related to the new feature was added
 - [] The new code follows the
-  [contributor guidelines](https://github.com/SciML/.github/blob/master/CONTRIBUTING.md), in particular the [ScioML Style Guide](https://github.com/SciML/SciMLStyle) and
+  [contributor guidelines](https://github.com/SciML/.github/blob/master/CONTRIBUTING.md), in particular the [SciML Style Guide](https://github.com/SciML/SciMLStyle) and
   [COLPRAC](https://github.com/SciML/COLPRAC).
 
 **Additional context**

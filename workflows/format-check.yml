@@ -1,0 +1,56 @@
+name: "Format Check"
+
+on:
+  workflow_call:
+    inputs:
+      directory:
+        description: "The directory on which JuliaFormatter needs to be run"
+        default: "."
+        required: false
+        type: string
+      julia-version:
+        description: "Julia version"
+        default: "1"
+        required: false
+        type: string
+      juliaformatter-version:
+        description: "Version of JuliaFormatter to use"
+        default: "1.0.51"
+        required: false
+        type: string
+      fail-if-unformatted:
+        description: "Fail the job if formatting check fails"
+        default: true
+        required: false
+        type: boolean
+
+jobs:
+  format-check:
+    name: "Check Formatting"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: julia-actions/setup-julia@v1
+        with:
+          version: "${{ inputs.julia-version }}"
+
+      - name: "Install JuliaFormatter and run formatter on ${{ github.repository }}/${{ inputs.directory }}"
+        shell: julia --color=yes {0}
+        run: |
+          using Pkg
+          Pkg.add(PackageSpec(name="JuliaFormatter", version="${{ inputs.juliaformatter-version }}"))
+          using JuliaFormatter
+          format("./${{ inputs.directory }}", SciMLStyle(), verbose=true)
+
+      - name: "Check formatting"
+        id: check-formatting
+        run: |
+          MODIFIED_FILES="$(git diff --name-only)"
+          if [ -n "$MODIFIED_FILES" ]; then
+            echo "Format check failed. Please format the following files with JuliaFormatter v${{ inputs.juliaformatter-version }}."
+            echo "$MODIFIED_FILES"
+            if [ "${{ inputs.fail-if-unformatted }}" == "true" ]; then
+              exit 1
+            fi
+          fi

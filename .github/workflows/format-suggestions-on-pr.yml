@@ -1,4 +1,4 @@
-name: "Format PR"
+name: "Reusable Format PR Workflow"
 
 on:
   workflow_call:

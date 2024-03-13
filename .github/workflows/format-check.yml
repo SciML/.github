@@ -45,7 +45,7 @@ jobs:
         with:
           version: "${{ inputs.julia-version }}"
 
-      - name: "Install JuliaFormatter and run formatter on ${{ github.repository }}/${{ inputs.directory }}"
+      - name: "Install JuliaFormatter and run formatter on ${{ github.repository }}${{ inputs.directory != '.' && format('/{0}',inputs.directory) || '' }}"
         shell: julia --color=yes {0}
         run: |
           using Pkg
@@ -57,10 +57,11 @@ jobs:
         id: check-formatting
         run: |
           MODIFIED_FILES="$(git diff --name-only)"
-          if [ -n "$MODIFIED_FILES" ]; then
+
+          if [ -z "$MODIFIED_FILES" ]; then
             echo "formatted=true" >> $GITHUB_OUTPUT
           else
-            echo "Format check failed. Please format the following files with JuliaFormatter v${{ inputs.juliaformatter-version }}."
+            echo "Format check failed. Please format the following file(s) with JuliaFormatter v${{ inputs.juliaformatter-version }}."
             echo "$MODIFIED_FILES"
 
             {

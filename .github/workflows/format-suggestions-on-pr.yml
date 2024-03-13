@@ -37,7 +37,7 @@ jobs:
   open-pr:
     needs: check-formatting
     if: ${{ !needs.check-formatting.outputs.formatted }}
-    runs-on: ubuntu
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 

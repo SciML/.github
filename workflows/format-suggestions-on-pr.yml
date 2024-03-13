@@ -1,0 +1,56 @@
+name: "Format PR"
+
+on:
+  workflow_call:
+    inputs:
+      directory:
+        description: "The directory on which JuliaFormatter needs to be run"
+        default: "."
+        required: false
+        type: string
+      julia-version:
+        description: "Julia version"
+        default: "1"
+        required: false
+        type: string
+      juliaformatter-version:
+        description: "Version of JuliaFormatter to use"
+        default: "1.0.51"
+        required: false
+        type: string
+      github_token:
+        description: "The GitHub token to use for making the suggestions."
+        default: "${{ github.token }}"
+        required: false
+        type: string
+
+jobs:
+  check-formatting:
+    name: "Check Formatting"
+    uses: "SciML/.github/workflows/format-check.yml@at/reusable-formatting-pr-workflow"
+    with:
+      directory: "${{ inputs.directory }}"
+      julia-version: "${{ inputs.julia-version }}"
+      juliaformatter-version: "${{ inputs.juliaformatter-version }}"
+      fail-if-unformatted: false
+
+  open-pr:
+    needs: check-formatting
+    if: ${{ !needs.check-formatting.outputs.formatted }}
+    runs-on: ubuntu
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Apply formatting changes"
+        run: |
+          echo "$(cat <<'END_FORMATTING_DIFF'
+          ${{ needs.check-formatting.outputs.format-diff-patch }}
+          END_FORMATTING_DIFF
+          )" | git apply
+
+      - uses: reviewdog/action-suggester@v1
+        with:
+          github_token: ${{ inputs.github_token }}
+          tool_name: JuliaFormatter
+          fail_on_error: true
+          filter_mode: added

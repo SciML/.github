@@ -23,11 +23,21 @@ on:
         default: true
         required: false
         type: boolean
+    outputs:
+      formatted:
+        description: "If the specified directory is already formatted or not."
+        value: "${{ jobs.format-check.outputs.formatted }}"
+      format-diff-patch:
+        description: "A patch consisting of formatting changes which can be applied to comply with format checking. Available only if `outputs.formatted` is `false`"
+        value: "${{ jobs.format-check.outputs.formatting-changes }}"
 
 jobs:
   format-check:
     name: "Check Formatting"
     runs-on: ubuntu-latest
+    outputs:
+      formatted: "${{ steps.check-formatting.outputs.formatted }}"
+      formatting-changes: "${{ steps.check-formatting.outputs.formatting-changes }}"
     steps:
       - uses: actions/checkout@v4
 
@@ -48,8 +58,17 @@ jobs:
         run: |
           MODIFIED_FILES="$(git diff --name-only)"
           if [ -n "$MODIFIED_FILES" ]; then
+            echo "formatted=true" >> $GITHUB_OUTPUT
+          else
             echo "Format check failed. Please format the following files with JuliaFormatter v${{ inputs.juliaformatter-version }}."
             echo "$MODIFIED_FILES"
+
+            {
+              echo "formatting-changes<<EOF"
+              echo "$(git diff)"
+              echo EOF
+            } >> $GITHUB_OUTPUT
+
             if [ "${{ inputs.fail-if-unformatted }}" == "true" ]; then
               exit 1
             fi

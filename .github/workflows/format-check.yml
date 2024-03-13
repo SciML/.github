@@ -57,9 +57,12 @@ jobs:
         id: check-formatting
         run: |
           MODIFIED_FILES="$(git diff --name-only)"
+          echo "$MODIFIED_FILES"
+
           if [ -n "$MODIFIED_FILES" ]; then
             echo "formatted=true" >> $GITHUB_OUTPUT
           else
+            echo "$MODIFIED_FILES"
             echo "Format check failed. Please format the following files with JuliaFormatter v${{ inputs.juliaformatter-version }}."
             echo "$MODIFIED_FILES"
 

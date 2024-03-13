@@ -52,8 +52,8 @@ jobs:
           Pkg.add(PackageSpec(name="JuliaFormatter", version="${{ inputs.juliaformatter-version }}"))
           using JuliaFormatter
           format("./${{ inputs.directory }}", SciMLStyle(), verbose=true)
-          git --version
-          git diff --name-only
+          run(Cmd(`git --version`))
+          run(Cmd(`git diff --name-only`))
           echo "$(git diff --name-only)"
 
       - name: "Check formatting"

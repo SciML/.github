@@ -27,7 +27,7 @@ on:
 jobs:
   check-formatting:
     name: "Check Formatting"
-    uses: "SciML/.github/workflows/format-check.yml@at/reusable-formatting-pr-workflow"
+    uses: "SciML/.github/workflows/format-check.yml@master"
     with:
       directory: "${{ inputs.directory }}"
       julia-version: "${{ inputs.julia-version }}"

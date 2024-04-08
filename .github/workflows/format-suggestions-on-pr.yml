@@ -34,7 +34,8 @@ jobs:
       juliaformatter-version: "${{ inputs.juliaformatter-version }}"
       fail-if-unformatted: false
 
-  open-pr:
+  comment-formatting-suggestions:
+    name: "Comment Formatting Suggestions on PR"
     needs: check-formatting
     if: ${{ !needs.check-formatting.outputs.formatted }}
     runs-on: ubuntu-latest

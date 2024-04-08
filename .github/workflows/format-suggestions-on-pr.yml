@@ -18,11 +18,6 @@ on:
         default: "1.0.51"
         required: false
         type: string
-      github_token:
-        description: "The GitHub token to use for making the suggestions."
-        default: "${{ github.token }}"
-        required: false
-        type: string
 
 jobs:
   check-formatting:
@@ -51,7 +46,6 @@ jobs:
 
       - uses: reviewdog/action-suggester@v1
         with:
-          github_token: ${{ inputs.github_token }}
           tool_name: JuliaFormatter
           fail_on_error: true
           filter_mode: added

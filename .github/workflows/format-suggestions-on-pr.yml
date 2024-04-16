@@ -18,6 +18,20 @@ on:
         default: "1.0.51"
         required: false
         type: string
+      concurrent-jobs:
+        description: "Run jobs concurrently"
+        default: false
+        required: false
+        type: boolean
+      cancel-in-progress:
+        description: "Cancel jobs in-progress in favor of a new one in the same concurrency group"
+        default: true
+        required: false
+        type: boolean
+
+concurrency:
+  group: "${{ github.workflow }}-${{ inputs.concurrent-jobs && github.run_id || github.ref  }}"
+  cancel-in-progress: ${{ !inputs.concurrent-jobs && inputs.cancel-in-progress }}
 
 jobs:
   check-formatting:

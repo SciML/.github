@@ -23,6 +23,17 @@ on:
         default: true
         required: false
         type: boolean
+      concurrent-jobs:
+        description: "Run jobs concurrently"
+        default: false
+        required: false
+        type: boolean
+      cancel-in-progress:
+        description: "Cancel jobs in-progress in favor of a new one in the same concurrency group"
+        default: true
+        required: false
+        type: boolean
+
     outputs:
       formatted:
         description: "If the specified directory is already formatted or not."
@@ -30,6 +41,10 @@ on:
       format-diff-patch:
         description: "A patch consisting of formatting changes which can be applied to comply with format checking. Available only if `outputs.formatted` is `false`"
         value: "${{ jobs.format-check.outputs.formatting-changes }}"
+
+concurrency:
+  group: "${{ github.workflow }}-${{ inputs.concurrent-jobs && github.run_id || github.ref  }}"
+  cancel-in-progress: ${{ !inputs.concurrent-jobs && inputs.cancel-in-progress }}
 
 jobs:
   format-check:

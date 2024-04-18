@@ -1,0 +1,90 @@
+name: "Reusable Tests Workflow"
+
+on:
+  workflow_call:
+    inputs:
+      julia-version:
+        description: "Julia version"
+        default: "1"
+        required: false
+        type: string
+      julia-arch:
+        description: "Architecture of Julia to be used"
+        required: false
+        type: string
+      group:
+        description: "The 'GROUP' of tests that need to be run. This will requires an ENV `GROUP` to be (conditionally) defined within your package tests as well to selectively run groups of tests"
+        default: ""
+        required: false
+        type: string
+      os:
+        description: "The machine configuration on which the job needs to be run"
+        default: "ubuntu-latest"
+        required: false
+        type: string
+      cache:
+        description: "Use the julia-actions/cache action for caching"
+        default: true
+        required: false
+        type: boolean
+      buildpkg:
+        description: "Use the julia-actions/buildpkg action to build the package first"
+        default: true
+        required: false
+        type: boolean
+      julia-runtest-depwarn:
+        description: "Value of the --depwarn flag while running Julia"
+        default: "error"
+        required: false
+        type: string
+      concurrent-jobs:
+        description: "Run jobs concurrently"
+        default: false
+        required: false
+        type: boolean
+      cancel-in-progress:
+        description: "Cancel jobs in-progress in favor of a new one in the same concurrency group"
+        default: true
+        required: false
+        type: boolean
+
+concurrency:
+  group: "${{ inputs.concurrent-jobs && github.run_id || github.ref  }}:${{ github.workflow }}${{ inputs.group != '' && format('#{0}', inputs.group) || '' }}"
+  cancel-in-progress: ${{ !inputs.concurrent-jobs && inputs.cancel-in-progress }}
+
+jobs:
+  tests:
+    name: "Run Tests"
+    runs-on: "${{ inputs.os }}"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Setup Julia ${{ inputs.julia-version }}"
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: "${{ inputs.julia-version }}"
+          arch: "${{ inputs.julia-arch || runner.arch }}"
+
+      - uses: julia-actions/cache@v1
+        if: "${{ inputs.cache }}"
+        with:
+          token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - uses: julia-actions/julia-buildpkg@v1
+        if: "${{ inputs.buildpkg }}"
+
+      - name: "Run tests on ${{ inputs.os }} with Julia v${{ inputs.julia-version }}"
+        uses: julia-actions/julia-runtest@v1
+        with:
+          depwarn: "${{ inputs.julia-runtest-depwarn }}"
+        env:
+          GROUP: "${{ inputs.group }}"
+
+      - uses: julia-actions/julia-processcoverage@v1
+
+      - name: "Report Coverage with Codecov"
+        uses: codecov/codecov-action@v4
+        with:
+          file: lcov.info
+          token: "${{ secrets.CODECOV_TOKEN }}"
+          fail_ci_if_error: true

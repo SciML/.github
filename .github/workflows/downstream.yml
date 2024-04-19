@@ -1,4 +1,4 @@
-name: "Reusable Tests Workflow"
+name: "Reusable Downstream Tests Workflow"
 
 on:
   workflow_call:
@@ -12,13 +12,22 @@ on:
         description: "Architecture of Julia to be used"
         required: false
         type: string
+      owner:
+        description: "The owner of the downstream repository that needs to be tested"
+        required: false
+        default: "SciML"
+        type: string
+      repo:
+        description: "The name of the downstream repository that needs to be tested"
+        required: true
+        type: string
       group:
         description: "The 'GROUP' of tests that need to be run. This will requires an ENV `GROUP` to be (conditionally) defined within your package tests as well to selectively run groups of tests"
-        default: ""
+        default: "All"
         required: false
         type: string
       os:
-        description: "The machine configuration on which the job needs to be run"
+        description: "The machine configuration on which the job needs to be run."
         default: "ubuntu-latest"
         required: false
         type: string
@@ -58,16 +67,23 @@ on:
         type: boolean
 
 concurrency:
-  group: "${{ inputs.concurrent-jobs && github.run_id || github.ref  }}:${{ github.workflow }}${{ inputs.group != '' && format('#{0}', inputs.group) || '' }}"
+  group: "${{ inputs.concurrent-jobs && github.run_id || github.ref  }}:${{ inputs.owner }}/${{ inputs.repo }}-${{ github.workflow }}${{ inputs.group != '' && format('#{0}', inputs.group) || '' }}"
   cancel-in-progress: ${{ !inputs.concurrent-jobs && inputs.cancel-in-progress }}
 
 jobs:
-  tests:
-    name: "Run Tests"
+  downstream-tests:
+    name: "Downstream Tests - ${{ inputs.group }}"
     continue-on-error: ${{ inputs.continue-on-error || inputs.julia-version == 'nightly' }}
     runs-on: "${{ inputs.os }}"
     steps:
-      - uses: actions/checkout@v4
+      - name: "Checkout ${{ github.repository }}"
+        uses: actions/checkout@v4
+
+      - name: "Checkout Downstream ${{ inputs.owner }}/${{ inputs.repo }}"
+        uses: actions/checkout@v4
+        with:
+          repository: "${{ inputs.owner }}/${{ inputs.repo }}"
+          path: "downstream"
 
       - name: "Setup Julia ${{ inputs.julia-version }}"
         uses: julia-actions/setup-julia@v2
@@ -83,20 +99,30 @@ jobs:
       - uses: julia-actions/julia-buildpkg@v1
         if: "${{ inputs.buildpkg }}"
 
-      - name: "Run tests on ${{ inputs.os }} with Julia v${{ inputs.julia-version }}"
-        uses: julia-actions/julia-runtest@v1
-        with:
-          depwarn: "${{ inputs.julia-runtest-depwarn }}"
-          coverage: "${{ inputs.coverage }}"
-        env:
-          GROUP: "${{ inputs.group }}"
+      - name: "Run Downstream Tests on ${{ inputs.os }} with Julia v${{ inputs.julia-version }}"
+        shell: julia --color=yes --project=downstream {0}
+        run: |
+          using Pkg
+          try
+            # force it to use this PR's version of the package
+            Pkg.develop(PackageSpec(path="."))  # resolver may fail with main deps
+            Pkg.update()
+            Pkg.test(coverage=${{ inputs.coverage }})  # resolver may fail with test time deps
+          catch err
+            err isa Pkg.Resolve.ResolverError || rethrow()
+
+            # If we can't resolve that means this is incompatible by SemVer and this is fine
+            # It means we marked this as a breaking change, so we don't need to worry about
+            # Mistakenly introducing a breaking change, as we have intentionally made one
+            @info "Not compatible with this release. No problem." exception=err
+            exit(0)  # Exit immediately, as a success
+          end
 
       - uses: julia-actions/julia-processcoverage@v1
-        if: "${{ inputs.coverage }}"
 
       - name: "Report Coverage with Codecov"
-        uses: codecov/codecov-action@v4
         if: "${{ inputs.coverage }}"
+        uses: codecov/codecov-action@v4
         with:
           file: lcov.info
           token: "${{ secrets.CODECOV_TOKEN }}"

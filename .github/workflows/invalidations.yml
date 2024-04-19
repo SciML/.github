@@ -30,7 +30,7 @@ on:
         type: boolean
 
 concurrency:
-  group: "${{ github.workflow }}-${{ inputs.concurrent-jobs && github.run_id || github.ref  }}"
+  group: "${{ inputs.concurrent-jobs && github.run_id || github.ref  }}:${{ github.workflow }}"
   cancel-in-progress: ${{ !inputs.concurrent-jobs && inputs.cancel-in-progress }}
 
 jobs:

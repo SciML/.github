@@ -55,20 +55,6 @@ on:
         description: "Prevent the workflow run from failing if/when the job fails"
         required: false
         type: boolean
-      concurrent-jobs:
-        description: "Run jobs concurrently"
-        default: false
-        required: false
-        type: boolean
-      cancel-in-progress:
-        description: "Cancel jobs in-progress in favor of a new one in the same concurrency group"
-        default: true
-        required: false
-        type: boolean
-
-concurrency:
-  group: "${{ inputs.concurrent-jobs && github.run_id || github.ref  }}:${{ inputs.owner }}/${{ inputs.repo }}-${{ github.workflow }}${{ inputs.group != '' && format('#{0}', inputs.group) || '' }}"
-  cancel-in-progress: ${{ !inputs.concurrent-jobs && inputs.cancel-in-progress }}
 
 jobs:
   downstream-tests:

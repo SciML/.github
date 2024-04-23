@@ -72,7 +72,7 @@ concurrency:
 
 jobs:
   downstream-tests:
-    name: "Downstream Tests - ${{ inputs.group }}"
+    name: "Downstream Tests${{ inputs.group != '' && format(' - {0}', inputs.group) || '' }}"
     continue-on-error: ${{ inputs.continue-on-error || inputs.julia-version == 'nightly' }}
     runs-on: "${{ inputs.os }}"
     steps:

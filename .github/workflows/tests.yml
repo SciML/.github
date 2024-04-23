@@ -63,7 +63,7 @@ concurrency:
 
 jobs:
   tests:
-    name: "Run Tests"
+    name: "Tests${{ inputs.group != '' && format(' - {0}', inputs.group) || '' }}"
     continue-on-error: ${{ inputs.continue-on-error || inputs.julia-version == 'nightly' }}
     runs-on: "${{ inputs.os }}"
     steps:

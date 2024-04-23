@@ -29,10 +29,6 @@ on:
         required: false
         type: boolean
 
-concurrency:
-  group: "${{ inputs.concurrent-jobs && github.run_id || github.ref  }}:${{ github.workflow }}"
-  cancel-in-progress: ${{ !inputs.concurrent-jobs && inputs.cancel-in-progress }}
-
 jobs:
   check-formatting:
     name: "Check Formatting"
@@ -42,6 +38,8 @@ jobs:
       julia-version: "${{ inputs.julia-version }}"
       juliaformatter-version: "${{ inputs.juliaformatter-version }}"
       fail-if-unformatted: false
+      concurrent-jobs: "${{ inputs.concurrent-jobs }}"
+      cancel-in-progress: "${{ inputs.cancel-in-progress }}"
 
   comment-formatting-suggestions:
     name: "Comment Formatting Suggestions on PR"

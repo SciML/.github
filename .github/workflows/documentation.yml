@@ -1,0 +1,75 @@
+name: "Reusable Documentation Build and Deploy Workflow"
+
+on:
+  workflow_call:
+    inputs:
+      documenter-key:
+        description: "The `DOCUMENTER_KEY` secret required for deploying the documentation built for authentication with the ssh deploy key"
+        required: false
+        type: string
+      github-token:
+        description: "The GitHub token required for authentication with the ssh deploy key"
+        required: false
+        type: string
+      julia-version:
+        description: "Julia version"
+        default: "1"
+        required: false
+        type: string
+      os:
+        description: "The machine configuration on which the job needs to be run"
+        default: "ubuntu-latest"
+        required: false
+        type: string
+      cache:
+        description: "Use the julia-actions/cache action for caching"
+        default: true
+        required: false
+        type: boolean
+      coverage:
+        description: "Collect and generate code coverage-related information"
+        default: true
+        required: false
+        type: boolean
+      continue-on-error:
+        description: "Prevent the workflow run from failing if/when the job fails"
+        required: false
+        type: boolean
+
+jobs:
+  tests:
+    name: "Build and Deploy Documentation"
+    continue-on-error: ${{ inputs.continue-on-error || inputs.julia-version == 'nightly' }}
+    runs-on: "${{ inputs.os }}"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Setup Julia ${{ inputs.julia-version }}"
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: "${{ inputs.julia-version }}"
+
+      - uses: julia-actions/cache@v1
+        if: "${{ inputs.cache }}"
+        with:
+          token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: "Install Dependencies"
+        run: julia --project=docs/ -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
+
+      - name: "Build and Deploy Documentation"
+        env:
+          GITHUB_TOKEN: ${{ inputs.github-token || secrets.GITHUB_TOKEN }}
+          DOCUMENTER_KEY: ${{ inputs.documenter-key || secrets.DOCUMENTER_KEY }}
+        run: julia --project=docs/ ${{ inputs.coverage && '--code-coverage=user' }} docs/make.jl
+
+      - uses: julia-actions/julia-processcoverage@v1
+        if: "${{ inputs.coverage }}"
+
+      - name: "Report Coverage with Codecov"
+        uses: codecov/codecov-action@v4
+        if: "${{ inputs.coverage }}"
+        with:
+          file: lcov.info
+          token: "${{ secrets.CODECOV_TOKEN }}"
+          fail_ci_if_error: true

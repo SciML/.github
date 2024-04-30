@@ -7,6 +7,11 @@ on:
         description: "The `DOCUMENTER_KEY` secret required for deploying the documentation built for authentication with the ssh deploy key"
         required: false
         type: string
+      debug-documenter:
+        description: "Run julia with JULIA_DEBUG set to 'Documenter'"
+        default: false
+        required: false
+        type: boolean
       github-token:
         description: "The GitHub token required for authentication with the ssh deploy key"
         required: false
@@ -66,7 +71,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ inputs.github-token || secrets.GITHUB_TOKEN }}
           DOCUMENTER_KEY: ${{ inputs.documenter-key || secrets.DOCUMENTER_KEY }}
-        run: julia --project=docs/ ${{ inputs.coverage && '--code-coverage=user' }} docs/make.jl
+        run: ${{ inputs.debug-documenter && 'JULIA_DEBUG="Documenter"' || '' }} julia --project=docs/ ${{ inputs.coverage && '--code-coverage=user' }} docs/make.jl
 
       - uses: julia-actions/julia-processcoverage@v1
         if: "${{ inputs.coverage }}"

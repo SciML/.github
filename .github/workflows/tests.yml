@@ -37,6 +37,11 @@ on:
         default: true
         required: false
         type: boolean
+      coverage-directories:
+        description: "Comma-separated list of directories where the julia-processcoverage action will look for coverage information (e.g. `src,examples`)"
+        default: "src,ext"
+        required: false
+        type: string
       julia-runtest-depwarn:
         description: "Value of the --depwarn flag while running Julia"
         default: "error"
@@ -79,6 +84,9 @@ jobs:
 
       - uses: julia-actions/julia-processcoverage@v1
         if: "${{ inputs.coverage }}"
+        with:
+          directories: "${{ inputs.coverage-directories }}"
+
 
       - name: "Report Coverage with Codecov"
         uses: codecov/codecov-action@v4

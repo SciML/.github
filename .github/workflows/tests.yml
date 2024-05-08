@@ -12,6 +12,11 @@ on:
         description: "Architecture of Julia to be used"
         required: false
         type: string
+      project:
+        description: "The value is passed to Julia's `--project` flag"
+        default: '@.'
+        required: false
+        type: string
       group:
         description: "The 'GROUP' of tests that need to be run. This will requires an ENV `GROUP` to be (conditionally) defined within your package tests as well to selectively run groups of tests"
         default: ""
@@ -77,6 +82,7 @@ jobs:
       - name: "Run tests on ${{ inputs.os }} with Julia v${{ inputs.julia-version }}"
         uses: julia-actions/julia-runtest@v1
         with:
+          project: "${{ inputs.project }}"
           depwarn: "${{ inputs.julia-runtest-depwarn }}"
           coverage: "${{ inputs.coverage }}"
         env:
@@ -86,7 +92,6 @@ jobs:
         if: "${{ inputs.coverage }}"
         with:
           directories: "${{ inputs.coverage-directories }}"
-
 
       - name: "Report Coverage with Codecov"
         uses: codecov/codecov-action@v4

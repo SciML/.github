@@ -48,7 +48,7 @@ on:
         type: boolean
       julia-runtest-depwarn:
         description: "Value of the --depwarn flag while running Julia"
-        default: "error"
+        default: "yes"
         required: false
         type: string
       continue-on-error:

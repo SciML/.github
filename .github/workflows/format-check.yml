@@ -18,11 +18,6 @@ on:
         default: "1.0.50"
         required: false
         type: string
-      fail-if-unformatted:
-        description: "Fail the job if formatting check fails"
-        default: true
-        required: false
-        type: boolean
       concurrent-jobs:
         description: "Run jobs concurrently"
         default: false
@@ -85,7 +80,5 @@ jobs:
               echo EOF
             } >> $GITHUB_OUTPUT
 
-            if [ "${{ inputs.fail-if-unformatted }}" == "true" ]; then
-              exit 1
-            fi
+            exit 1
           fi

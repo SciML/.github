@@ -37,14 +37,13 @@ jobs:
       directory: "${{ inputs.directory }}"
       julia-version: "${{ inputs.julia-version }}"
       juliaformatter-version: "${{ inputs.juliaformatter-version }}"
-      fail-if-unformatted: false
       concurrent-jobs: "${{ inputs.concurrent-jobs }}"
       cancel-in-progress: "${{ inputs.cancel-in-progress }}"
 
   comment-formatting-suggestions:
     name: "Comment Formatting Suggestions on PR"
     needs: check-formatting
-    if: ${{ !needs.check-formatting.outputs.formatted }}
+    if: ${{ failure() }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

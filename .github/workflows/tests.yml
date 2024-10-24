@@ -22,6 +22,11 @@ on:
         default: ""
         required: false
         type: string
+      self-hosted:
+        description: "Run the job needs on a self hosted machine"
+        default: false
+        required: false
+        type: boolean
       os:
         description: "The machine configuration on which the job needs to be run"
         default: "ubuntu-latest"
@@ -61,7 +66,7 @@ jobs:
   tests:
     name: "Tests${{ inputs.group != '' && format(' - {0}', inputs.group) || '' }}"
     continue-on-error: ${{ inputs.continue-on-error || inputs.julia-version == 'nightly' }}
-    runs-on: "${{ inputs.os }}"
+    runs-on: "${{ inputs.self-hosted && 'self-hosted' || inputs.os }}"
     steps:
       - uses: actions/checkout@v4
 
@@ -79,7 +84,7 @@ jobs:
       - uses: julia-actions/julia-buildpkg@v1
         if: "${{ inputs.buildpkg }}"
 
-      - name: "Run tests on ${{ inputs.os }} with Julia v${{ inputs.julia-version }}"
+      - name: "Run tests ${{ inputs.self-hosted && '' || format('on {0}', inputs.os) }} with Julia v${{ inputs.julia-version }}"
         uses: julia-actions/julia-runtest@v1
         with:
           project: "${{ inputs.project }}"

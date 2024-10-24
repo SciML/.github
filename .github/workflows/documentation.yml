@@ -21,6 +21,11 @@ on:
         default: "1"
         required: false
         type: string
+      self-hosted:
+        description: "Run the job needs on a self hosted machine"
+        default: false
+        required: false
+        type: boolean
       os:
         description: "The machine configuration on which the job needs to be run"
         default: "ubuntu-latest"
@@ -50,7 +55,7 @@ jobs:
   tests:
     name: "Build and Deploy Documentation"
     continue-on-error: ${{ inputs.continue-on-error || inputs.julia-version == 'nightly' }}
-    runs-on: "${{ inputs.os }}"
+    runs-on: "${{ inputs.self-hosted && 'self-hosted' || inputs.os }}"
     steps:
       - uses: actions/checkout@v4
 

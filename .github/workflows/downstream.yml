@@ -26,6 +26,11 @@ on:
         default: "All"
         required: false
         type: string
+      self-hosted:
+        description: "Run the job needs on a self hosted machine"
+        default: false
+        required: false
+        type: boolean
       os:
         description: "The machine configuration on which the job needs to be run."
         default: "ubuntu-latest"
@@ -60,7 +65,7 @@ jobs:
   downstream-tests:
     name: "Downstream Tests${{ inputs.group != '' && format(' - {0}', inputs.group) || '' }}"
     continue-on-error: ${{ inputs.continue-on-error || inputs.julia-version == 'nightly' }}
-    runs-on: "${{ inputs.os }}"
+    runs-on: "${{ inputs.self-hosted && 'self-hosted' || inputs.os }}"
     steps:
       - name: "Checkout ${{ github.repository }}"
         uses: actions/checkout@v4
@@ -85,7 +90,7 @@ jobs:
       - uses: julia-actions/julia-buildpkg@v1
         if: "${{ inputs.buildpkg }}"
 
-      - name: "Run Downstream Tests on ${{ inputs.os }} with Julia v${{ inputs.julia-version }}"
+      - name: "Run tests ${{ inputs.self-hosted && '' || format('on {0}', inputs.os) }} with Julia v${{ inputs.julia-version }}"
         shell: julia --color=yes --project=downstream {0}
         run: |
           using Pkg

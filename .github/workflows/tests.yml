@@ -99,9 +99,9 @@ jobs:
           directories: "${{ inputs.coverage-directories }}"
 
       - name: "Report Coverage with Codecov"
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         if: "${{ inputs.coverage }}"
         with:
-          file: lcov.info
+          files: lcov.info
           token: "${{ secrets.CODECOV_TOKEN }}"
           fail_ci_if_error: true

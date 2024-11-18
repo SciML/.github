@@ -100,7 +100,7 @@ jobs:
 
       - name: "Report Coverage with Codecov"
         uses: codecov/codecov-action@v4
-        if: "${{ inputs.coverage && github.event.pull_request.head.repo.full_name == github.repository }}"
+        if: "${{ inputs.coverage }}"
         with:
           file: lcov.info
           token: "${{ secrets.CODECOV_TOKEN }}"

@@ -64,8 +64,7 @@ jobs:
         echo "Invalidations on ${{ github.head_ref || github.ref_name }}: ${{ steps.invalidations-in-pr.outputs.total }} (${{ steps.invalidations-in-pr.outputs.deps }} via deps)" >> $GITHUB_STEP_SUMMARY
 
     - name: "Check if the PR increases the number of invalidations"
+      if: ${{ fromJSON(steps.invalidations-in-pr.outputs.total) > fromJSON(steps.invalidations-baseline.outputs.total) }}
       run: |
-        if [ ${{ steps.invalidations-in-pr.outputs.total }} -gt ${{ steps.invalidations-baseline.outputs.total }} ]; then
           echo "More invalidations have been introduced."
           exit 1
-        fi

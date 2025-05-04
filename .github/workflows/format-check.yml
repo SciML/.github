@@ -15,7 +15,7 @@ on:
         type: string
       juliaformatter-version:
         description: "Version of JuliaFormatter to use"
-        default: "1"
+        default: "2"
         required: false
         type: string
       concurrent-jobs:

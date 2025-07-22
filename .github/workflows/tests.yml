@@ -61,6 +61,9 @@ on:
         description: "Prevent the workflow run from failing if/when the job fails"
         required: false
         type: boolean
+    secrets:
+      CODECOV_TOKEN:
+        required: true
 
 jobs:
   tests:

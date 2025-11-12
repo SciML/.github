@@ -76,7 +76,7 @@ jobs:
           version: "${{ inputs.julia-version }}"
           arch: "${{ inputs.julia-arch || runner.arch }}"
 
-      - uses: julia-actions/cache@v1
+      - uses: julia-actions/cache@v2
         if: "${{ inputs.cache }}"
         with:
           token: "${{ secrets.GITHUB_TOKEN }}"

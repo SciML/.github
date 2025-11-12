@@ -68,10 +68,10 @@ jobs:
     runs-on: "${{ inputs.self-hosted && 'self-hosted' || inputs.os }}"
     steps:
       - name: "Checkout ${{ github.repository }}"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: "Checkout Downstream ${{ inputs.owner }}/${{ inputs.repo }}"
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: "${{ inputs.owner }}/${{ inputs.repo }}"
           path: "downstream"

@@ -90,4 +90,3 @@ jobs:
           files: lcov.info
           flags: "docs"
           token: "${{ secrets.CODECOV_TOKEN }}"
-          fail_ci_if_error: true

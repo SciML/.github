@@ -1,0 +1,64 @@
+name: "Reusable Downgrade Compatibility Test Workflow"
+
+on:
+  workflow_call:
+    inputs:
+      julia-version:
+        description: "Julia version (downgrade is usually run on the oldest supported version)"
+        default: "lts"
+        required: false
+        type: string
+      group:
+        description: "The 'GROUP' of tests that need to be run. This requires an ENV `GROUP` to be (conditionally) defined within your package tests as well to selectively run groups of tests"
+        default: ""
+        required: false
+        type: string
+      skip:
+        description: "Comma-separated list of packages to skip when downgrading compat (passed to julia-actions/julia-downgrade-compat)"
+        default: "Pkg,TOML"
+        required: false
+        type: string
+      projects:
+        description: "Comma-separated list of project directories to downgrade (passed to julia-actions/julia-downgrade-compat)"
+        default: "."
+        required: false
+        type: string
+      allow-reresolve:
+        description: "Allow Pkg to re-resolve (and thus relax) the downgraded environment when running tests"
+        default: false
+        required: false
+        type: boolean
+      self-hosted:
+        description: "Run the job on a self hosted machine"
+        default: false
+        required: false
+        type: boolean
+      os:
+        description: "The machine configuration on which the job needs to be run"
+        default: "ubuntu-latest"
+        required: false
+        type: string
+
+jobs:
+  downgrade:
+    name: "Downgrade Tests${{ inputs.group != '' && format(' - {0}', inputs.group) || '' }}"
+    runs-on: "${{ inputs.self-hosted && 'self-hosted' || inputs.os }}"
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: "${{ inputs.julia-version }}"
+
+      - uses: julia-actions/julia-downgrade-compat@v2
+        with:
+          skip: "${{ inputs.skip }}"
+          projects: "${{ inputs.projects }}"
+
+      - uses: julia-actions/julia-buildpkg@v1
+
+      - uses: julia-actions/julia-runtest@v1
+        with:
+          allow_reresolve: "${{ inputs.allow-reresolve }}"
+        env:
+          GROUP: "${{ inputs.group }}"

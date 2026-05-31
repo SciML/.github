@@ -1,0 +1,21 @@
+name: "Reusable Benchmarks Workflow"
+
+on:
+  workflow_call:
+    inputs:
+      julia-version:
+        description: "Julia version"
+        default: "1"
+        required: false
+        type: string
+
+jobs:
+  benchmark:
+    name: "Benchmarks"
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: MilesCranmer/AirspeedVelocity.jl@action-v1
+        with:
+          julia-version: "${{ inputs.julia-version }}"

@@ -13,6 +13,11 @@ on:
         default: "1"
         required: false
         type: string
+      exclude:
+        description: "Space-separated list of paths/directories to exclude from the Runic check (e.g. for vendored or legacy files Runic cannot parse). They are dropped from the git index before the check so runic-action's `git ls-files` skips them; the working tree and history are untouched."
+        default: ""
+        required: false
+        type: string
 
 jobs:
   runic:
@@ -24,6 +29,10 @@ jobs:
       - uses: julia-actions/setup-julia@v3
         with:
           version: "${{ inputs.julia-version }}"
+
+      - name: "Exclude paths from the Runic check"
+        if: "${{ inputs.exclude != '' }}"
+        run: git rm -r --cached --quiet --ignore-unmatch ${{ inputs.exclude }}
 
       - uses: fredrikekre/runic-action@v1
         with:

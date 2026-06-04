@@ -1,0 +1,104 @@
+name: "Reusable Sublibrary Downgrade Workflow"
+
+# Runs downgrade-compat tests for each sublibrary under lib/*. The sublibrary
+# list is discovered automatically (every lib/<name> with a Project.toml),
+# minus any names in `exclude`.
+
+on:
+  workflow_call:
+    inputs:
+      julia-version:
+        description: "Julia version to run the downgrade tests on"
+        default: "lts"
+        required: false
+        type: string
+      skip:
+        description: "Comma-separated deps to skip when downgrading (passed to julia-downgrade-compat)"
+        default: "Pkg,TOML"
+        required: false
+        type: string
+      projects:
+        description: "Space-separated explicit list of lib/* sublibrary paths to downgrade-test. If empty, every lib/<name> with a Project.toml is used (minus `exclude`)."
+        default: ""
+        required: false
+        type: string
+      exclude:
+        description: "Space-separated lib/* sublibrary directory names to exclude (applies only when `projects` is empty / auto-discovery)"
+        default: ""
+        required: false
+        type: string
+      allow-reresolve:
+        description: "Allow the test environment to resolve transitive/test-only deps the downgrade step does not lock"
+        default: true
+        required: false
+        type: boolean
+      group-env-name:
+        description: "Optional env var name to set as the test group for each sublibrary (e.g. ODEDIFFEQ_TEST_GROUP)"
+        default: ""
+        required: false
+        type: string
+      group-env-value:
+        description: "Value for group-env-name, when set"
+        default: ""
+        required: false
+        type: string
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      projects: ${{ steps.list.outputs.projects }}
+      has_any: ${{ steps.list.outputs.has_any }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: "List lib/* sublibraries with a Project.toml (minus exclude)"
+        id: list
+        run: |
+          EXPLICIT="${{ inputs.projects }}"
+          EXCLUDE="${{ inputs.exclude }}"
+          projects=()
+          if [ -n "$EXPLICIT" ]; then
+            for p in $EXPLICIT; do projects+=("$p"); done
+          else
+            for d in lib/*/; do
+              d="${d%/}"
+              [ -f "$d/Project.toml" ] || continue
+              name="$(basename "$d")"
+              skipit=false
+              for ex in $EXCLUDE; do [ "$ex" = "$name" ] && skipit=true; done
+              $skipit || projects+=("$d")
+            done
+          fi
+          json=$(printf '%s\n' "${projects[@]}" | grep . | python3 -c 'import sys,json; print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))')
+          echo "Sublibraries: $json"
+          echo "projects=$json" >> "$GITHUB_OUTPUT"
+          [ "$json" = "[]" ] && echo "has_any=false" >> "$GITHUB_OUTPUT" || echo "has_any=true" >> "$GITHUB_OUTPUT"
+
+  test:
+    needs: discover
+    if: needs.discover.outputs.has_any == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: ${{ fromJson(needs.discover.outputs.projects) }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: ${{ inputs.julia-version }}
+      - name: "Set sublibrary test group"
+        if: "${{ inputs.group-env-name != '' }}"
+        run: echo "${{ inputs.group-env-name }}=${{ inputs.group-env-value }}" >> "$GITHUB_ENV"
+      - uses: julia-actions/julia-downgrade-compat@v2
+        with:
+          projects: ${{ matrix.project }}
+          skip: ${{ inputs.skip }}
+          julia_version: ${{ inputs.julia-version }}
+      - uses: julia-actions/julia-buildpkg@v1
+        with:
+          project: ${{ matrix.project }}
+      - uses: julia-actions/julia-runtest@v1
+        with:
+          project: ${{ matrix.project }}
+          allow_reresolve: ${{ inputs.allow-reresolve }}

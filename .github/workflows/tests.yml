@@ -86,6 +86,22 @@ jobs:
         with:
           token: "${{ secrets.GITHUB_TOKEN }}"
 
+      - name: "Refresh General registry from git (sublibrary projects)"
+        if: "${{ inputs.project != '@.' && inputs.project != '.' }}"
+        shell: julia --color=yes {0}
+        run: |
+          using Pkg
+          # Sublibrary resolves often need just-registered sibling/parent
+          # versions that the cached pkg-server registry is too stale to have
+          # yet ("expected package X to be registered"). Re-clone General from
+          # git so the resolve below sees current versions. Only runs for
+          # sublibrary (project != @.) jobs.
+          try
+              Pkg.Registry.rm("General")
+          catch
+          end
+          Pkg.Registry.add(Pkg.RegistrySpec(url = "https://github.com/JuliaRegistries/General.git"))
+
       - name: "Develop in-repo [sources] path deps of ${{ inputs.project }}"
         if: "${{ inputs.buildpkg && inputs.project != '@.' && inputs.project != '.' }}"
         shell: julia --color=yes {0}
@@ -93,25 +109,33 @@ jobs:
           using Pkg
           proj = raw"${{ inputs.project }}"
           # On Julia < 1.11 the [sources] section is not auto-resolved during
-          # build/test, so develop any in-repo path deps the sub-project (e.g. a
-          # lib/* sublibrary) declares. No-op on >= 1.11 and for projects without
-          # a [sources] section.
+          # build/test, so develop the in-repo path deps the sub-project (e.g. a
+          # lib/* sublibrary) declares -- transitively, since a source dep can
+          # itself declare further [sources]. No-op on >= 1.11 and for projects
+          # without a [sources] section.
           if VERSION < v"1.11.0-DEV.0"
-            tomlpath = joinpath(proj, "Project.toml")
-            if isfile(tomlpath)
+            Pkg.activate(proj)
+            developed = Set{String}([normpath(abspath(proj))])  # never develop the active project (cyclic [sources])
+            specs = Pkg.PackageSpec[]
+            queue = String[proj]
+            while !isempty(queue)
+              dir = popfirst!(queue)
+              tomlpath = joinpath(dir, "Project.toml")
+              isfile(tomlpath) || continue
               toml = Pkg.TOML.parsefile(tomlpath)
-              if haskey(toml, "sources")
-                Pkg.activate(proj)
-                specs = Pkg.PackageSpec[]
-                for (dep, spec) in toml["sources"]
-                  if spec isa Dict && haskey(spec, "path")
-                    p = normpath(joinpath(proj, spec["path"]))
-                    isdir(p) && push!(specs, Pkg.PackageSpec(path = p))
+              haskey(toml, "sources") || continue
+              for (dep, spec) in toml["sources"]
+                if spec isa Dict && haskey(spec, "path")
+                  p = normpath(abspath(joinpath(dir, spec["path"])))
+                  if isdir(p) && !(p in developed)
+                    push!(developed, p)
+                    push!(specs, Pkg.PackageSpec(path = p))
+                    push!(queue, p)  # resolve this dep's own [sources] too
                   end
                 end
-                isempty(specs) || Pkg.develop(specs)
               end
             end
+            isempty(specs) || Pkg.develop(specs)
           end
 
       - uses: julia-actions/julia-buildpkg@v1

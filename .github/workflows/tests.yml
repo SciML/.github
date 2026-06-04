@@ -23,8 +23,8 @@ on:
         required: false
         type: string
       num-threads:
-        description: "Value of JULIA_NUM_THREADS for the test run (e.g. set to 2 to exercise multi-threaded code paths)"
-        default: "1"
+        description: "Value of JULIA_NUM_THREADS for the test run. Defaults to 2 so multi-threaded code paths are exercised (GitHub-hosted runners have >= 4 vCPUs); set to 1 for a strictly single-threaded run."
+        default: "2"
         required: false
         type: string
       self-hosted:

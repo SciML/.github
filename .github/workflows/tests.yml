@@ -22,6 +22,11 @@ on:
         default: ""
         required: false
         type: string
+      num-threads:
+        description: "Value of JULIA_NUM_THREADS for the test run (e.g. set to 2 to exercise multi-threaded code paths)"
+        default: "1"
+        required: false
+        type: string
       self-hosted:
         description: "Run the job needs on a self hosted machine"
         default: false
@@ -81,8 +86,38 @@ jobs:
         with:
           token: "${{ secrets.GITHUB_TOKEN }}"
 
+      - name: "Develop in-repo [sources] path deps of ${{ inputs.project }}"
+        if: "${{ inputs.buildpkg && inputs.project != '@.' && inputs.project != '.' }}"
+        shell: julia --color=yes {0}
+        run: |
+          using Pkg
+          proj = raw"${{ inputs.project }}"
+          # On Julia < 1.11 the [sources] section is not auto-resolved during
+          # build/test, so develop any in-repo path deps the sub-project (e.g. a
+          # lib/* sublibrary) declares. No-op on >= 1.11 and for projects without
+          # a [sources] section.
+          if VERSION < v"1.11.0-DEV.0"
+            tomlpath = joinpath(proj, "Project.toml")
+            if isfile(tomlpath)
+              toml = Pkg.TOML.parsefile(tomlpath)
+              if haskey(toml, "sources")
+                Pkg.activate(proj)
+                specs = Pkg.PackageSpec[]
+                for (dep, spec) in toml["sources"]
+                  if spec isa Dict && haskey(spec, "path")
+                    p = normpath(joinpath(proj, spec["path"]))
+                    isdir(p) && push!(specs, Pkg.PackageSpec(path = p))
+                  end
+                end
+                isempty(specs) || Pkg.develop(specs)
+              end
+            end
+          end
+
       - uses: julia-actions/julia-buildpkg@v1
         if: "${{ inputs.buildpkg }}"
+        with:
+          project: "${{ inputs.project }}"
 
       - name: "Run tests ${{ inputs.self-hosted && '' || format('on {0}', inputs.os) }} with Julia v${{ inputs.julia-version }}"
         uses: julia-actions/julia-runtest@v1
@@ -92,6 +127,7 @@ jobs:
           coverage: "${{ inputs.coverage }}"
         env:
           GROUP: "${{ inputs.group }}"
+          JULIA_NUM_THREADS: "${{ inputs.num-threads }}"
 
       - uses: julia-actions/julia-processcoverage@v1
         if: "${{ inputs.coverage }}"

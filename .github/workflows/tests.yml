@@ -23,8 +23,8 @@ on:
         required: false
         type: string
       num-threads:
-        description: "Value of JULIA_NUM_THREADS for the test run. Defaults to 2 so multi-threaded code paths are exercised (GitHub-hosted runners have >= 4 vCPUs); set to 1 for a strictly single-threaded run."
-        default: "2"
+        description: "Value of JULIA_NUM_THREADS for the test run. Default 'auto' matches the runner's vCPU count (e.g. 4 on GitHub-hosted). On self-hosted runners 'auto' is overridden to 2 (those runners are large and shared, so matching the full core count would oversubscribe); pass an explicit integer to control it on self-hosted."
+        default: "auto"
         required: false
         type: string
       self-hosted:
@@ -127,7 +127,10 @@ jobs:
           coverage: "${{ inputs.coverage }}"
         env:
           GROUP: "${{ inputs.group }}"
-          JULIA_NUM_THREADS: "${{ inputs.num-threads }}"
+          # Match the runner's vCPUs (auto) on hosted runners; but on large,
+          # shared self-hosted runners fall back to 2 when left at 'auto' to
+          # avoid oversubscribing (an explicit integer is always honored).
+          JULIA_NUM_THREADS: "${{ (inputs.self-hosted && inputs.num-threads == 'auto') && '2' || inputs.num-threads }}"
 
       - uses: julia-actions/julia-processcoverage@v1
         if: "${{ inputs.coverage }}"

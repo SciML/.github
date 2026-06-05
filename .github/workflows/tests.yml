@@ -86,36 +86,6 @@ jobs:
         with:
           token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - name: "Refresh General registry from git (sublibrary projects)"
-        if: "${{ inputs.project != '@.' && inputs.project != '.' }}"
-        shell: julia --color=yes {0}
-        run: |
-          using Pkg
-          # Sublibrary resolves often need just-registered sibling/parent
-          # versions that the cached pkg-server registry is too stale to have
-          # yet ("expected package X to be registered"). Refresh General so the
-          # resolve below sees current versions. Only runs for sublibrary
-          # (project != @.) jobs.
-          #
-          # IMPORTANT: never rm the registry on self-hosted runners. They share
-          # one depot across concurrent jobs, so removing General leaves a window
-          # where other jobs resolve against a missing registry -> corruption and
-          # lock-ups. Destructive re-clone only on github-hosted (isolated per-job
-          # depot); on self-hosted do a non-destructive update (Pkg serialises it).
-          if get(ENV, "RUNNER_ENVIRONMENT", "") == "self-hosted"
-              try
-                  Pkg.Registry.update("General")
-              catch
-                  try; Pkg.Registry.add("General"); catch; end
-              end
-          else
-              try
-                  Pkg.Registry.rm("General")
-              catch
-              end
-              Pkg.Registry.add(Pkg.RegistrySpec(url = "https://github.com/JuliaRegistries/General.git"))
-          end
-
       - name: "Develop in-repo [sources] path deps of ${{ inputs.project }}"
         if: "${{ inputs.buildpkg && inputs.project != '@.' && inputs.project != '.' }}"
         shell: julia --color=yes {0}

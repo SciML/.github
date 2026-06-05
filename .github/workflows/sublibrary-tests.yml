@@ -93,33 +93,6 @@ jobs:
         continue-on-error: true
         with:
           cache-compiled: 'false'
-      - name: "Refresh General registry directly from git"
-        shell: julia --color=yes --project=. {0}
-        run: |
-          using Pkg
-          # Refresh General to dodge pkg-server lag BEFORE the develop step:
-          # develop's resolve needs current versions of registered deps, and the
-          # cached pkg-server registry is often stale.
-          #
-          # IMPORTANT: never rm the registry on self-hosted runners. They share
-          # one depot across concurrent matrix jobs, so removing General leaves a
-          # window where other jobs resolve against a missing registry ->
-          # corruption and lock-ups. Destructive re-clone only on github-hosted
-          # (isolated per-job depot); on self-hosted do a non-destructive update
-          # (Pkg serialises it via the registry lock).
-          if get(ENV, "RUNNER_ENVIRONMENT", "") == "self-hosted"
-              try
-                  Pkg.Registry.update("General")
-              catch
-                  try; Pkg.Registry.add("General"); catch; end
-              end
-          else
-              try
-                  Pkg.Registry.rm("General")
-              catch
-              end
-              Pkg.Registry.add(Pkg.RegistrySpec(url = "https://github.com/JuliaRegistries/General.git"))
-          end
       - name: "Develop local path deps (Julia < 1.11)"
         shell: julia --color=yes --project=. {0}
         run: |

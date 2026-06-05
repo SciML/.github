@@ -13,6 +13,16 @@ on:
         default: "1"
         required: false
         type: string
+      extensions:
+        description: "Comma-separated file extensions to check (e.g. 'jl' or 'jl,md'); requires Runic >= 1.7"
+        default: "jl"
+        required: false
+        type: string
+      docstrings:
+        description: "Format Julia code blocks in docstrings; requires Runic >= 1.7"
+        default: false
+        required: false
+        type: boolean
       exclude:
         description: "Space-separated list of paths/directories to exclude from the Runic check (e.g. for vendored or legacy files Runic cannot parse). They are dropped from the git index before the check so runic-action's `git ls-files` skips them; the working tree and history are untouched."
         default: ""
@@ -37,3 +47,5 @@ jobs:
       - uses: fredrikekre/runic-action@v1
         with:
           version: "${{ inputs.runic-version }}"
+          extensions: "${{ inputs.extensions }}"
+          docstrings: "${{ inputs.docstrings }}"

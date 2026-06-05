@@ -1,0 +1,61 @@
+name: "Reusable Runic Suggestions Workflow"
+
+# Posts Runic formatting fixes as PR review suggestions (the Runic counterpart
+# of format-suggestions-on-pr.yml). runic-action with format_files: true
+# rewrites the tree, then reviewdog/action-suggester turns the diff into inline
+# suggestions. Apply them one-by-one, or "Add suggestion to batch" + "Commit
+# suggestions" in the GitHub UI to land them all as a single commit.
+
+on:
+  workflow_call:
+    inputs:
+      julia-version:
+        description: "Julia version"
+        default: "1"
+        required: false
+        type: string
+      runic-version:
+        description: "Version of Runic to use"
+        default: "1"
+        required: false
+        type: string
+      extensions:
+        description: "Comma-separated file extensions to format (e.g. 'jl' or 'jl,md'); requires Runic >= 1.7"
+        default: "jl"
+        required: false
+        type: string
+      docstrings:
+        description: "Format Julia code blocks in docstrings; requires Runic >= 1.7"
+        default: false
+        required: false
+        type: boolean
+
+jobs:
+  runic-suggestions:
+    name: "Runic Suggestions"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: "${{ inputs.julia-version }}"
+
+      - name: "Format with Runic"
+        # format_files rewrites the tree in place; the action still exits
+        # non-zero when it had to reformat, so don't let that stop the
+        # suggestion step.
+        continue-on-error: true
+        uses: fredrikekre/runic-action@v1
+        with:
+          version: "${{ inputs.runic-version }}"
+          extensions: "${{ inputs.extensions }}"
+          docstrings: "${{ inputs.docstrings }}"
+          format_files: "true"
+
+      - name: "Suggest formatting changes on the PR"
+        uses: reviewdog/action-suggester@v1
+        with:
+          tool_name: "Runic"
+          fail_level: "any"
+          filter_mode: "added"

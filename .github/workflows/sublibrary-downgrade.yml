@@ -69,8 +69,15 @@ jobs:
               $skipit || projects+=("$d")
             done
           fi
-          # jq is preinstalled on GitHub-hosted runners; don't assume python3.
-          json=$(printf '%s\n' "${projects[@]}" | grep . | jq -R . | jq -sc .)
+          # Build the JSON array in pure shell -- neither jq nor python3 is
+          # guaranteed on a self-hosted runner. lib/* names have no JSON-special
+          # characters, so plain quoting is safe.
+          json=""
+          for p in "${projects[@]}"; do
+            [ -n "$p" ] || continue
+            if [ -z "$json" ]; then json="\"$p\""; else json="$json,\"$p\""; fi
+          done
+          json="[$json]"
           echo "Sublibraries: $json"
           echo "projects=$json" >> "$GITHUB_OUTPUT"
           [ "$json" = "[]" ] && echo "has_any=false" >> "$GITHUB_OUTPUT" || echo "has_any=true" >> "$GITHUB_OUTPUT"

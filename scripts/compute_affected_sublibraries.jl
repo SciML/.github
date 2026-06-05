@@ -51,6 +51,12 @@
 #
 # Output: JSON array of {group, version, runner, timeout, num_threads} objects
 #   for GitHub Actions matrix include.
+#
+# With the --projects flag the output is instead a JSON array of the affected
+# "lib/<pkg>" paths (the union of directly-changed and transitively-affected
+# sublibraries), for the project-model sublibrary CI which tests each via
+# `tests.yml` project=lib/<pkg> rather than GROUP dispatch. test_groups.toml
+# (versions/runner/timeout/threads/local_only) does not apply in that mode.
 
 using TOML
 
@@ -241,6 +247,15 @@ function json_value(v::Int)
     return print(v)
 end
 
+function print_projects(direct::Set{String}, transitive::Set{String})
+    print("[")
+    for (i, pkg) in enumerate(sort!(collect(union(direct, transitive))))
+        i > 1 && print(",")
+        print("\"lib/", pkg, "\"")
+    end
+    return println("]")
+end
+
 function print_json(entries)
     print("[")
     for (i, entry) in enumerate(entries)
@@ -271,6 +286,10 @@ function main()
 
     changed_files = split(read(stdin, String), '\n')
     direct, transitive = compute_affected(collect(String, changed_files), graph, reverse_deps)
+
+    if "--projects" in ARGS
+        return print_projects(direct, transitive)
+    end
 
     matrix = build_matrix(direct, transitive, lib_dir)
     return print_json(matrix)

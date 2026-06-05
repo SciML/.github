@@ -1,14 +1,21 @@
 name: "Reusable Sublibrary CI (project model)"
 
-# Lists every lib/<name> sublibrary with a Project.toml and runs each one's
-# test suite via the reusable tests.yml workflow (project: lib/<name>).
+# Tests the lib/<name> sublibraries affected by a push/PR via the reusable
+# tests.yml workflow (project: lib/<name>). The affected set is computed from
+# the sublibrary dependency graph (scripts/compute_affected_sublibraries.jl
+# --projects): a changed sublibrary plus every sublibrary that transitively
+# depends on it; test-only changes don't propagate to dependents; changes
+# outside lib/ select nothing. Set test-all: true to test every sublibrary
+# regardless of the diff.
+#
 # tests.yml transitively git-develops the sublibrary's in-repo [sources] path
 # deps, so no root runtests.jl GROUP dispatcher is needed in the calling repo.
 #
-# Contrast sublibrary-tests.yml, which uses GROUP dispatch + dependency-graph
-# change detection and suits very large monorepos (e.g. OrdinaryDiffEq); this
-# project-model workflow tests every sublibrary on every run and suits the
-# smaller monorepos.
+# Contrast sublibrary-tests.yml, which uses the same change detection but the
+# GROUP-dispatch model with per-sublibrary test_groups.toml (multiple Julia
+# versions, custom runners/timeouts/threads, GPU groups). Use that for repos
+# that need those per-group knobs (e.g. OrdinaryDiffEq); use this project-model
+# workflow when each lib/<name>/test/runtests.jl is a self-contained suite.
 #
 # Caller (per repo) only supplies its branch triggers + concurrency:
 #
@@ -45,36 +52,76 @@ on:
         default: "auto"
         required: false
         type: string
+      test-all:
+        description: "Test every lib/<name> sublibrary regardless of the diff (e.g. scheduled or manual full runs)"
+        default: false
+        required: false
+        type: boolean
+      dotgithub-ref:
+        description: "Ref of SciML/.github to source the affected-sublibrary detection script from"
+        default: "v1"
+        required: false
+        type: string
 
 jobs:
-  list-sublibraries:
+  detect:
     runs-on: ubuntu-latest
     outputs:
-      projects: ${{ steps.list.outputs.projects }}
+      projects: ${{ steps.compute.outputs.projects }}
+      has_changes: ${{ steps.compute.outputs.has_changes }}
     steps:
       - uses: actions/checkout@v6
-      - name: "List lib/* sublibraries"
-        id: list
+        with:
+          fetch-depth: 0
+      - name: "Checkout SciML/.github for the detection script"
+        if: "${{ !inputs.test-all }}"
+        uses: actions/checkout@v6
+        with:
+          repository: SciML/.github
+          ref: "${{ inputs.dotgithub-ref }}"
+          path: .sciml-dotgithub
+      - uses: julia-actions/setup-julia@v3
+        if: "${{ !inputs.test-all }}"
+        with:
+          version: "1"
+      - name: "Compute affected sublibraries"
+        id: compute
         run: |
-          # Build the JSON array in pure shell -- neither jq nor python3 is
-          # guaranteed on the runner. lib/* names have no JSON-special
-          # characters, so plain quoting is safe; yields [] when none match.
-          projects=""
-          for d in lib/*/; do
-            d="${d%/}"
-            [ -f "$d/Project.toml" ] || continue
-            if [ -z "$projects" ]; then projects="\"$d\""; else projects="$projects,\"$d\""; fi
-          done
-          projects="[$projects]"
-          echo "Sublibraries: $projects"
+          if [ "${{ inputs.test-all }}" = "true" ]; then
+            # Pure-shell listing of every lib/* (no jq/python3); test-all bypass.
+            projects=""
+            for d in lib/*/; do
+              d="${d%/}"
+              [ -f "$d/Project.toml" ] || continue
+              if [ -z "$projects" ]; then projects="\"$d\""; else projects="$projects,\"$d\""; fi
+            done
+            projects="[$projects]"
+          else
+            if [ "${{ github.event_name }}" = "push" ]; then
+              CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} 2>/dev/null || git diff --name-only HEAD~1 HEAD)
+            else
+              git fetch origin ${{ github.event.pull_request.base.ref }}
+              CHANGED=$(git diff --name-only origin/${{ github.event.pull_request.base.ref }}...HEAD)
+            fi
+            echo "Changed files under lib/:"
+            echo "$CHANGED" | grep "^lib/" || echo "(none)"
+            projects=$(echo "$CHANGED" | julia .sciml-dotgithub/scripts/compute_affected_sublibraries.jl . --projects)
+          fi
+          echo "Affected sublibraries: $projects"
           echo "projects=$projects" >> "$GITHUB_OUTPUT"
+          if [ "$projects" = "[]" ]; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
 
   test:
-    needs: list-sublibraries
+    needs: detect
+    if: needs.detect.outputs.has_changes == 'true'
     strategy:
       fail-fast: false
       matrix:
-        project: ${{ fromJson(needs.list-sublibraries.outputs.projects) }}
+        project: ${{ fromJson(needs.detect.outputs.projects) }}
     name: "Sublibrary - ${{ matrix.project }}"
     uses: "SciML/.github/.github/workflows/tests.yml@v1"
     with:

@@ -91,6 +91,16 @@ on:
         default: "GROUP"
         required: false
         type: string
+      apt-packages:
+        description: "Space-separated apt packages to install before building/testing (for packages with system dependencies, e.g. R / Python / FEniCS wrappers). Linux runners only."
+        default: ""
+        required: false
+        type: string
+      force-latest-compatible-version:
+        description: "Value of julia-runtest's force_latest_compatible_version"
+        default: false
+        required: false
+        type: boolean
 
 jobs:
   tests:
@@ -148,6 +158,12 @@ jobs:
             isempty(specs) || Pkg.develop(specs)
           end
 
+      - name: "Install system packages"
+        if: "${{ inputs.apt-packages != '' && runner.os == 'Linux' }}"
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ inputs.apt-packages }}
+
       - uses: julia-actions/julia-buildpkg@v1
         if: "${{ inputs.buildpkg }}"
         with:
@@ -168,6 +184,7 @@ jobs:
           coverage: "${{ inputs.coverage }}"
           check_bounds: "${{ inputs.check-bounds }}"
           allow_reresolve: ${{ inputs.allow-reresolve }}
+          force_latest_compatible_version: ${{ inputs.force-latest-compatible-version }}
         env:
           # Match the runner's vCPUs (auto) on hosted runners; but on large,
           # shared self-hosted runners fall back to 2 when left at 'auto' to

@@ -3,57 +3,56 @@ name: "Reusable Sublibrary CI (project model)"
 # Tests the lib/<name> sublibraries affected by a push/PR via the reusable
 # tests.yml workflow (project: lib/<name>). The affected set is computed from
 # the sublibrary dependency graph (scripts/compute_affected_sublibraries.jl
-# --projects): a changed sublibrary plus every sublibrary that transitively
-# depends on it; test-only changes don't propagate to dependents; changes
-# outside lib/ select nothing. Set test-all: true to test every sublibrary
-# regardless of the diff.
+# --projects-matrix): a changed sublibrary plus every sublibrary that
+# transitively depends on it; test-only changes don't propagate to dependents;
+# changes outside lib/ select nothing. Set test-all: true to test everything.
 #
-# tests.yml transitively git-develops the sublibrary's in-repo [sources] path
-# deps, so no root runtests.jl GROUP dispatcher is needed in the calling repo.
+# Each affected sublibrary is expanded into its test_groups.toml matrix
+# (multiple Julia versions, GPU/threaded groups on custom runners, per-group
+# timeout/num_threads/local_only), exactly like sublibrary-tests.yml -- but run
+# in the project model: tests.yml with project=lib/<name> and the group passed
+# via group-env-name (e.g. ODEDIFFEQ_TEST_GROUP). Sublibraries with no
+# test_groups.toml get the default Core on [lts,1.11,1,pre] + QA on [1].
+# tests.yml transitively git-develops the sublibrary's in-repo [sources], so no
+# root runtests.jl GROUP dispatcher is needed.
 #
-# Contrast sublibrary-tests.yml, which uses the same change detection but the
-# GROUP-dispatch model with per-sublibrary test_groups.toml (multiple Julia
-# versions, custom runners/timeouts/threads, GPU groups). Use that for repos
-# that need those per-group knobs (e.g. OrdinaryDiffEq); use this project-model
-# workflow when each lib/<name>/test/runtests.jl is a self-contained suite.
-#
-# Caller (per repo) only supplies its branch triggers + concurrency:
+# Caller (per repo) supplies its branch triggers + concurrency; repos whose
+# sublibraries read a non-default group env var or need check-bounds=auto set
+# those once here:
 #
 #   jobs:
 #     sublibraries:
 #       uses: SciML/.github/.github/workflows/sublibrary-project-tests.yml@v1
+#       # with:                                   # OrdinaryDiffEq, e.g.
+#       #   group-env-name: ODEDIFFEQ_TEST_GROUP
+#       #   check-bounds: auto
 #       secrets: inherit
 
 on:
   workflow_call:
     inputs:
-      julia-version:
-        description: "Julia version for each sublibrary test run"
-        default: "1"
-        required: false
-        type: string
       coverage:
         description: "Collect per-sublibrary coverage (uploaded with directories pointed at lib/<name>)"
         default: true
         required: false
         type: boolean
-      self-hosted:
-        description: "Run the sublibrary test jobs on a self-hosted runner"
-        default: false
+      group-env-name:
+        description: "Environment variable name the sublibrary test run reads its group from (default GROUP; OrdinaryDiffEq uses ODEDIFFEQ_TEST_GROUP)"
+        default: "GROUP"
+        required: false
+        type: string
+      check-bounds:
+        description: "Value of julia-runtest's check_bounds (yes/no/auto) for each sublibrary"
+        default: "yes"
+        required: false
+        type: string
+      allow-reresolve:
+        description: "Value of julia-runtest's allow_reresolve for each sublibrary"
+        default: true
         required: false
         type: boolean
-      os:
-        description: "Runner OS for the sublibrary test jobs (ignored when self-hosted)"
-        default: "ubuntu-latest"
-        required: false
-        type: string
-      num-threads:
-        description: "JULIA_NUM_THREADS for each sublibrary test run (see tests.yml)"
-        default: "auto"
-        required: false
-        type: string
       test-all:
-        description: "Test every lib/<name> sublibrary regardless of the diff (e.g. scheduled or manual full runs)"
+        description: "Test every lib/<name> sublibrary (full test_groups matrix) regardless of the diff"
         default: false
         required: false
         type: boolean
@@ -67,49 +66,40 @@ jobs:
   detect:
     runs-on: ubuntu-latest
     outputs:
-      projects: ${{ steps.compute.outputs.projects }}
+      matrix: ${{ steps.compute.outputs.matrix }}
       has_changes: ${{ steps.compute.outputs.has_changes }}
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: "Checkout SciML/.github for the detection script"
-        if: "${{ !inputs.test-all }}"
         uses: actions/checkout@v6
         with:
           repository: SciML/.github
           ref: "${{ inputs.dotgithub-ref }}"
           path: .sciml-dotgithub
       - uses: julia-actions/setup-julia@v3
-        if: "${{ !inputs.test-all }}"
         with:
           version: "1"
       - name: "Compute affected sublibraries"
         id: compute
         run: |
           if [ "${{ inputs.test-all }}" = "true" ]; then
-            # Pure-shell listing of every lib/* (no jq/python3); test-all bypass.
-            projects=""
-            for d in lib/*/; do
-              d="${d%/}"
-              [ -f "$d/Project.toml" ] || continue
-              if [ -z "$projects" ]; then projects="\"$d\""; else projects="$projects,\"$d\""; fi
-            done
-            projects="[$projects]"
+            # Every lib/* file looks "changed" so the script's matrix builder
+            # emits the full per-sublibrary test_groups expansion.
+            CHANGED=$(git ls-files 'lib/*')
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} 2>/dev/null || git diff --name-only HEAD~1 HEAD)
           else
-            if [ "${{ github.event_name }}" = "push" ]; then
-              CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} 2>/dev/null || git diff --name-only HEAD~1 HEAD)
-            else
-              git fetch origin ${{ github.event.pull_request.base.ref }}
-              CHANGED=$(git diff --name-only origin/${{ github.event.pull_request.base.ref }}...HEAD)
-            fi
-            echo "Changed files under lib/:"
-            echo "$CHANGED" | grep "^lib/" || echo "(none)"
-            projects=$(echo "$CHANGED" | julia .sciml-dotgithub/scripts/compute_affected_sublibraries.jl . --projects)
+            git fetch origin ${{ github.event.pull_request.base.ref }}
+            CHANGED=$(git diff --name-only origin/${{ github.event.pull_request.base.ref }}...HEAD)
           fi
-          echo "Affected sublibraries: $projects"
-          echo "projects=$projects" >> "$GITHUB_OUTPUT"
-          if [ "$projects" = "[]" ]; then
+          echo "Changed files under lib/:"
+          echo "$CHANGED" | grep "^lib/" || echo "(none)"
+          MATRIX=$(echo "$CHANGED" | julia .sciml-dotgithub/scripts/compute_affected_sublibraries.jl . --projects-matrix)
+          echo "Matrix: $MATRIX"
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          if [ "$MATRIX" = "[]" ]; then
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
           else
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
@@ -121,15 +111,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        project: ${{ fromJson(needs.detect.outputs.projects) }}
-    name: "Sublibrary - ${{ matrix.project }}"
+        include: ${{ fromJson(needs.detect.outputs.matrix) }}
+    name: "${{ matrix.project }}${{ matrix.group != 'Core' && format(' [{0}]', matrix.group) || '' }} (julia ${{ matrix.version }})"
     uses: "SciML/.github/.github/workflows/tests.yml@v1"
     with:
       project: "${{ matrix.project }}"
-      julia-version: "${{ inputs.julia-version }}"
+      group: "${{ matrix.group }}"
+      group-env-name: "${{ inputs.group-env-name }}"
+      julia-version: "${{ matrix.version }}"
+      runner: ${{ toJson(matrix.runner) }}
+      timeout-minutes: ${{ matrix.timeout }}
+      num-threads: "${{ matrix.num_threads }}"
+      check-bounds: "${{ inputs.check-bounds }}"
+      allow-reresolve: ${{ inputs.allow-reresolve }}
       coverage: ${{ inputs.coverage }}
       coverage-directories: "${{ matrix.project }}/src,${{ matrix.project }}/ext"
-      self-hosted: ${{ inputs.self-hosted }}
-      os: "${{ inputs.os }}"
-      num-threads: "${{ inputs.num-threads }}"
     secrets: "inherit"

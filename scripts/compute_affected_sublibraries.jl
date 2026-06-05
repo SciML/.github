@@ -256,6 +256,54 @@ function print_projects(direct::Set{String}, transitive::Set{String})
     return println("]")
 end
 
+# Like build_matrix, but for the project model: one entry per affected
+# sublibrary × test group × version, carrying the lib/<pkg> project path and
+# the bare group name (passed to the sublibrary's runtests via the group env
+# var, e.g. ODEDIFFEQ_TEST_GROUP) rather than the GROUP-dispatch "pkg_group"
+# string. Same test_groups.toml semantics (versions/runner/timeout/threads/
+# local_only), downstream-only-on-v1 rule, and EXCLUDES as build_matrix.
+function build_projects_matrix(
+        direct::Set{String}, transitive::Set{String}, lib_dir::String
+    )
+    entries = []
+    for pkg in sort!(collect(union(direct, transitive)))
+        groups = load_test_groups(lib_dir, pkg)
+        is_downstream = pkg in transitive
+        for group_name in sort!(collect(keys(groups)))
+            config = groups[group_name]
+            is_downstream && config.local_only && continue
+            ci_group = group_name == "Core" ? pkg : "$(pkg)_$(group_name)"
+            versions = is_downstream ? [DOWNSTREAM_VERSION] : config.versions
+            for ver in versions
+                (ci_group, ver) in EXCLUDES && continue
+                push!(
+                    entries,
+                    (;
+                        project = "lib/$(pkg)", group = group_name, version = ver,
+                        runner = config.runner, timeout = config.timeout,
+                        num_threads = config.num_threads,
+                    )
+                )
+            end
+        end
+    end
+    return entries
+end
+
+function print_projects_matrix(entries)
+    print("[")
+    for (i, entry) in enumerate(entries)
+        i > 1 && print(",")
+        print(
+            "{\"project\":\"", entry.project, "\",\"group\":\"", entry.group,
+            "\",\"version\":\"", entry.version, "\",\"runner\":",
+        )
+        json_value(entry.runner)
+        print(",\"timeout\":", entry.timeout, ",\"num_threads\":", entry.num_threads, "}")
+    end
+    return println("]")
+end
+
 function print_json(entries)
     print("[")
     for (i, entry) in enumerate(entries)
@@ -286,6 +334,10 @@ function main()
 
     changed_files = split(read(stdin, String), '\n')
     direct, transitive = compute_affected(collect(String, changed_files), graph, reverse_deps)
+
+    if "--projects-matrix" in ARGS
+        return print_projects_matrix(build_projects_matrix(direct, transitive, lib_dir))
+    end
 
     if "--projects" in ARGS
         return print_projects(direct, transitive)

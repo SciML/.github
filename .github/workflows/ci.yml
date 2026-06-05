@@ -1,0 +1,43 @@
+name: "CI (self-test)"
+
+# CI for this repo's own contents: lint the reusable workflows (and the shell
+# in their `run:` steps via shellcheck) and run the test suite for the
+# sublibrary affected-set detection script. These workflows ship to ~all of
+# SciML via `@v1`, so a regression here breaks every consumer on the next tag.
+
+on:
+  pull_request:
+    branches:
+      - master
+  push:
+    branches:
+      - master
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
+
+jobs:
+  actionlint:
+    name: "actionlint + shellcheck"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      # The rhysd/actionlint image bundles shellcheck, so `run:` scripts in the
+      # workflows are shellcheck-linted too.
+      - name: "Lint workflows"
+        uses: docker://rhysd/actionlint:1.7.12
+        with:
+          args: "-color"
+
+  script-tests:
+    name: "compute_affected_sublibraries.jl tests"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: "1"
+      - uses: julia-actions/cache@v3
+      - name: "Run detection-script tests"
+        run: julia --color=yes test/runtests.jl

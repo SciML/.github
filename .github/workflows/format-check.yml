@@ -69,16 +69,16 @@ jobs:
           MODIFIED_FILES="$(git diff --name-only)"
 
           if [ -z "$MODIFIED_FILES" ]; then
-            echo "formatted=true" >> $GITHUB_OUTPUT
+            echo "formatted=true" >> "$GITHUB_OUTPUT"
           else
             echo "Format check failed. Please format the following file(s) with JuliaFormatter v${{ inputs.juliaformatter-version }}."
             echo "$MODIFIED_FILES"
 
             {
               echo "formatting-changes<<EOF"
-              echo "$(git diff)"
+              git diff
               echo EOF
-            } >> $GITHUB_OUTPUT
+            } >> "$GITHUB_OUTPUT"
 
             exit 1
           fi

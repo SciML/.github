@@ -347,4 +347,8 @@ function main()
     return print_json(matrix)
 end
 
-main()
+# Only run when executed as a script; `include`-ing the file (e.g. from the
+# test suite) gets the functions without invoking main().
+if abspath(PROGRAM_FILE) == @__FILE__
+    main()
+end

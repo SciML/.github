@@ -23,6 +23,11 @@ on:
         default: "."
         required: false
         type: string
+      mode:
+        description: "julia-downgrade-compat mode: deps (direct), alldeps (deps+weakdeps), weakdeps, or forcedeps (strict lower-bound verification). Empty uses the action default."
+        default: ""
+        required: false
+        type: string
       allow-reresolve:
         description: "Allow Pkg to re-resolve (and thus relax) the downgraded environment when running tests"
         default: false
@@ -54,6 +59,7 @@ jobs:
         with:
           skip: "${{ inputs.skip }}"
           projects: "${{ inputs.projects }}"
+          mode: "${{ inputs.mode }}"
 
       - uses: julia-actions/julia-buildpkg@v1
 

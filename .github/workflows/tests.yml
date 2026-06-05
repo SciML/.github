@@ -66,12 +66,38 @@ on:
         description: "Prevent the workflow run from failing if/when the job fails"
         required: false
         type: boolean
+      runner:
+        description: "JSON-encoded runs-on value (string or array of labels, e.g. '[\"self-hosted\",\"Linux\",\"X64\",\"gpu\"]'). When non-empty it overrides self-hosted/os."
+        default: ""
+        required: false
+        type: string
+      timeout-minutes:
+        description: "Job timeout in minutes"
+        default: 360
+        required: false
+        type: number
+      check-bounds:
+        description: "Value of julia-runtest's check_bounds (yes/no/auto)"
+        default: "yes"
+        required: false
+        type: string
+      allow-reresolve:
+        description: "Value of julia-runtest's allow_reresolve"
+        default: true
+        required: false
+        type: boolean
+      group-env-name:
+        description: "Name of the environment variable to set to `group` for the test run (e.g. GROUP or ODEDIFFEQ_TEST_GROUP)"
+        default: "GROUP"
+        required: false
+        type: string
 
 jobs:
   tests:
     name: "Tests${{ inputs.group != '' && format(' - {0}', inputs.group) || '' }}"
     continue-on-error: ${{ inputs.continue-on-error || inputs.julia-version == 'nightly' }}
-    runs-on: "${{ inputs.self-hosted && 'self-hosted' || inputs.os }}"
+    runs-on: ${{ inputs.runner != '' && fromJson(inputs.runner) || (inputs.self-hosted && 'self-hosted' || inputs.os) }}
+    timeout-minutes: ${{ inputs.timeout-minutes }}
     steps:
       - uses: actions/checkout@v6
 
@@ -127,14 +153,22 @@ jobs:
         with:
           project: "${{ inputs.project }}"
 
+      - name: "Set test group env (${{ inputs.group-env-name }})"
+        # Set the group under a configurable env var name so sublibraries that
+        # read e.g. ODEDIFFEQ_TEST_GROUP work the same as the default GROUP. The
+        # name must be dynamic, which the env: map can't express, so write it to
+        # $GITHUB_ENV here.
+        run: echo "${{ inputs.group-env-name }}=${{ inputs.group }}" >> "$GITHUB_ENV"
+
       - name: "Run tests ${{ inputs.self-hosted && '' || format('on {0}', inputs.os) }} with Julia v${{ inputs.julia-version }}"
         uses: julia-actions/julia-runtest@v1
         with:
           project: "${{ inputs.project }}"
           depwarn: "${{ inputs.julia-runtest-depwarn }}"
           coverage: "${{ inputs.coverage }}"
+          check_bounds: "${{ inputs.check-bounds }}"
+          allow_reresolve: ${{ inputs.allow-reresolve }}
         env:
-          GROUP: "${{ inputs.group }}"
           # Match the runner's vCPUs (auto) on hosted runners; but on large,
           # shared self-hosted runners fall back to 2 when left at 'auto' to
           # avoid oversubscribing (an explicit integer is always honored).

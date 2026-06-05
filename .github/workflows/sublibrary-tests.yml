@@ -93,18 +93,6 @@ jobs:
         continue-on-error: true
         with:
           cache-compiled: 'false'
-      - name: "Refresh General registry directly from git"
-        shell: julia --color=yes --project=. {0}
-        run: |
-          using Pkg
-          # Force a fresh git clone of General to dodge pkg-server lag, BEFORE
-          # the develop step: develop's resolve needs current versions of
-          # registered deps, and the cached pkg-server registry is often stale.
-          try
-              Pkg.Registry.rm("General")
-          catch
-          end
-          Pkg.Registry.add(Pkg.RegistrySpec(url = "https://github.com/JuliaRegistries/General.git"))
       - name: "Develop local path deps (Julia < 1.11)"
         shell: julia --color=yes --project=. {0}
         run: |

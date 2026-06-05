@@ -24,6 +24,17 @@ Repos that want to pin exactly can use `@v1.2.3` (immutable).
 3. The `Maintain major version tag` workflow automatically moves `v1` to the
    new release commit. Nothing else to do — every `@v1` consumer now gets it.
 
+   **If `v1` didn't move** (e.g. the tag-push run was stuck/failed), run the
+   workflow manually: Actions → "Maintain major version tag" → "Run workflow",
+   optionally passing the release tag (defaults to the latest `vX.Y.Z`). It
+   re-points `vX` at that release. You can also do it by hand:
+
+   ```bash
+   git fetch --tags
+   git tag -f v1 "$(git rev-list -n1 v1.3.0)"
+   git push -f origin refs/tags/v1
+   ```
+
 - **Bug/feature, backward compatible:** bump patch/minor (`v1.x.y`); `v1` moves.
 - **Breaking change** (e.g. dropping an input, switching the formatter): tag
   `v2.0.0`. `@v1` consumers are unaffected; they opt in by changing to `@v2`

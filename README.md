@@ -660,7 +660,8 @@ jobs:
 ## Releasing changes to these workflows
 
 Merge to `master`, then tag a semver release; `major-version-tag.yml` moves
-`@v1` for you. Full process in [`RELEASING.md`](RELEASING.md). Breaking changes
+`@v1` for you (or run it manually via `workflow_dispatch` if a tag-push run
+doesn't fire). Full process in [`RELEASING.md`](RELEASING.md). Breaking changes
 get a new major (`v2.0.0`) so `@v1` consumers aren't disrupted.
 
 This repo has its own CI (`ci.yml`): [`actionlint`](https://github.com/rhysd/actionlint)

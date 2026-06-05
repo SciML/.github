@@ -1,13 +1,23 @@
 name: "Maintain major version tag"
 
 # When a semver release tag (vX.Y.Z) is pushed, move the floating major tag
-# (vX) to point at it. Consumers pin `@vX` (e.g. tests.yml@v1) and thus track
-# the latest vX.Y.Z automatically, while exact pins (@vX.Y.Z) stay immutable.
+# (vX) to point at it, so consumers pinning `@vX` (e.g. tests.yml@v1) track the
+# latest vX.Y.Z automatically while exact pins (@vX.Y.Z) stay immutable.
+#
+# Also runnable manually (workflow_dispatch) as a fallback when the tag-push
+# event doesn't fire (e.g. a stuck/again-needed run): it points the major tag
+# at the given release tag, or the latest vX.Y.Z if none is given.
 
 on:
   push:
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to point the major tag at (e.g. v1.3.0). Empty = latest vX.Y.Z."
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -17,14 +27,33 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
-      - name: "Point the major tag at this release"
+      - name: "Point the major tag at the release"
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          full="${GITHUB_REF_NAME}"                       # e.g. v1.2.3
+          if [ "$EVENT_NAME" = "push" ]; then
+            full="$REF_NAME"                       # e.g. v1.2.3
+          else
+            full="$INPUT_TAG"
+            if [ -z "$full" ]; then
+              full="$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n1)"
+            fi
+          fi
+          if [ -z "$full" ]; then
+            echo "No release tag to act on." >&2
+            exit 1
+          fi
           major="v$(printf '%s' "${full#v}" | cut -d. -f1)"  # -> v1
-          echo "Moving ${major} -> ${full} (${GITHUB_SHA})"
+          sha="$(git rev-list -n1 "$full")"                  # deref annotated tags to a commit
+          echo "Moving ${major} -> ${full} (${sha})"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -f "${major}" "${GITHUB_SHA}"
+          git tag -f "${major}" "${sha}"
           git push -f origin "refs/tags/${major}"

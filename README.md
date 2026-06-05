@@ -30,11 +30,10 @@ Two things live here:
     [`docs-preview-cleanup.yml`](#docs-preview-cleanupyml) ·
     [`major-version-tag.yml`](#major-version-tagyml)
 - [Monorepos: sublibrary CI](#monorepos-sublibrary-ci)
-  - [Two execution models](#two-execution-models)
+  - [How sublibrary tests run](#how-sublibrary-tests-run)
   - [`test_groups.toml`](#test_groupstoml)
   - [Dependency-graph change detection](#dependency-graph-change-detection)
-  - [`sublibrary-tests.yml` (GROUP-dispatch)](#sublibrary-testsyml-group-dispatch)
-  - [`sublibrary-project-tests.yml` (project model)](#sublibrary-project-testsyml-project-model)
+  - [`sublibrary-project-tests.yml`](#sublibrary-project-testsyml)
   - [`sublibrary-downgrade.yml`](#sublibrary-downgradeyml)
 - [Recommended repository setup](#recommended-repository-setup)
 - [Secrets](#secrets)
@@ -425,22 +424,15 @@ its own `Project.toml` and `test/runtests.jl` (e.g. OrdinaryDiffEq,
 ModelingToolkit, Optimization, NonlinearSolve). Sublibrary CI runs each
 sublibrary's tests, and — crucially — only the ones a change actually affects.
 
-### Two execution models
+### How sublibrary tests run
 
-Both compute the **affected** sublibraries the same way (see
-[change detection](#dependency-graph-change-detection)); they differ in *how* a
-sublibrary's tests are executed:
-
-| | `sublibrary-project-tests.yml` (project model) | `sublibrary-tests.yml` (GROUP-dispatch) |
-|---|---|---|
-| How a sublib runs | `tests.yml` with `project: lib/X` (runs `lib/X/test/runtests.jl` directly) | Root `test/runtests.jl` with `GROUP=lib-name`, which activates `lib/X` and runs it |
-| Needs a root dispatcher? | **No** | **Yes** — root `runtests.jl` must map `GROUP` → activate `lib/<name>` |
-| Per-group versions / runners / timeouts | Yes (`test_groups.toml`) | Yes (`test_groups.toml`) |
-| Best for | Most monorepos; sublibs with self-contained `test/runtests.jl` | Repos whose root `runtests.jl` already does sophisticated cross-cutting dispatch |
-
-**Most repos want `sublibrary-project-tests.yml`.** It needs no per-repo root
-dispatcher, because `tests.yml` transitively develops the sublibrary's in-repo
-`[sources]`.
+`sublibrary-project-tests.yml` computes the **affected** sublibraries (see
+[change detection](#dependency-graph-change-detection)) and runs each via
+`tests.yml` with `project: lib/X` — i.e. `lib/X/test/runtests.jl` directly,
+with the test group passed through `group-env-name`. It needs no per-repo root
+`runtests.jl` dispatcher, because `tests.yml` transitively develops the
+sublibrary's in-repo `[sources]`. Per-sublibrary versions / runners / timeouts
+come from each sublib's `test_groups.toml` (below).
 
 ### `test_groups.toml`
 
@@ -500,31 +492,14 @@ the changed files:
 - Changes confined to a sublibrary's `test/` don't propagate to dependents.
 - Changes outside `lib/` select nothing (the root suite is covered by `CI.yml`).
 
-The script has three output modes:
+The script's output modes:
 
 | Invocation | Output | Used by |
 |---|---|---|
-| `… <repo>` | `[{group, version, runner, timeout, num_threads}, …]` | `sublibrary-tests.yml` |
 | `… <repo> --projects-matrix` | `[{project, group, version, runner, timeout, num_threads}, …]` | `sublibrary-project-tests.yml` |
 | `… <repo> --projects` | `["lib/A", "lib/B", …]` | simple path listing |
 
-### `sublibrary-tests.yml` (GROUP-dispatch)
-
-Thin caller; the model is driven by the repo's root `runtests.jl` + each
-sublibrary's `test_groups.toml`.
-
-| Input | Type | Default | Description |
-|---|---|---|---|
-| `dotgithub-ref` | string | `"v1"` | Ref of `SciML/.github` to source the detection script from. |
-
-```yaml
-jobs:
-  sublibrary-ci:
-    uses: "SciML/.github/.github/workflows/sublibrary-tests.yml@v1"
-    secrets: "inherit"
-```
-
-### `sublibrary-project-tests.yml` (project model)
+### `sublibrary-project-tests.yml`
 
 Lists the affected `lib/*` (with change detection) and runs each via
 `tests.yml` `project: lib/X`, expanding `test_groups.toml`. No root dispatcher

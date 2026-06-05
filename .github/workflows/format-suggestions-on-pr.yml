@@ -50,10 +50,9 @@ jobs:
 
       - name: "Apply formatting changes"
         run: |
-          echo "$(cat <<'END_FORMATTING_DIFF'
+          cat <<'END_FORMATTING_DIFF' | git apply
           ${{ needs.check-formatting.outputs.format-diff-patch }}
           END_FORMATTING_DIFF
-          )" | git apply
 
       - uses: reviewdog/action-suggester@v1
         with:

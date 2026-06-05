@@ -26,6 +26,8 @@ Two things live here:
     [`downgrade.yml`](#downgradeyml) · [`documentation.yml`](#documentationyml) ·
     [`runic.yml`](#runicyml) · [`format-check.yml` / `format-suggestions-on-pr.yml`](#format-checkyml--format-suggestions-on-pryml) ·
     [`spellcheck.yml`](#spellcheckyml) · [`benchmark.yml`](#benchmarkyml) ·
+    [`tagbot.yml`](#tagbotyml) · [`dependabot-automerge.yml`](#dependabot-automergeyml) ·
+    [`docs-preview-cleanup.yml`](#docs-preview-cleanupyml) ·
     [`major-version-tag.yml`](#major-version-tagyml)
 - [Monorepos: sublibrary CI](#monorepos-sublibrary-ci)
   - [Two execution models](#two-execution-models)
@@ -111,6 +113,8 @@ lines:
 | `Documentation.yml` | `documentation.yml@v1` | Build & deploy docs |
 | `FormatCheck.yml` | `runic.yml@v1` | Runic format check |
 | `SpellCheck.yml` | `spellcheck.yml@v1` | Spell-check with `typos` |
+| `TagBot.yml` | `tagbot.yml@v1` | Create releases/tags on registration |
+| `DocPreviewCleanup.yml` | `docs-preview-cleanup.yml@v1` | Delete closed-PR doc previews |
 
 Monorepos (a package with `lib/<sublibrary>/` sub-packages) add one more —
 [sublibrary CI](#monorepos-sublibrary-ci).
@@ -274,6 +278,11 @@ jobs:
     secrets: "inherit"
 ```
 
+> **Runic exemptions (do not roll Runic out to these):** **JumpProcesses.jl**
+> and **Catalyst.jl** are exempt from Runic at the maintainer's (Sam Isaacson)
+> request — they stay on their own JuliaFormatter (`Format`) setup. Don't add
+> `runic.yml` to these repos or reformat them with Runic.
+
 ### `format-check.yml` / `format-suggestions-on-pr.yml`
 
 [JuliaFormatter](https://github.com/domluna/JuliaFormatter.jl)-based
@@ -302,6 +311,103 @@ jobs:
 
 Runs benchmarks (via [AirspeedVelocity.jl](https://github.com/MilesCranmer/AirspeedVelocity.jl))
 and reports results on PRs. Input: `julia-version` (`"1"`).
+
+### `tagbot.yml`
+
+Creates GitHub releases/tags when a package is registered, via
+[JuliaRegistries/TagBot](https://github.com/JuliaRegistries/TagBot). Tags one
+package — the root, or a monorepo sublibrary when `subdir` is set. The
+if-guard (`workflow_dispatch` or `JuliaTagBot` actor) and the permissions block
+live in the reusable workflow; the caller keeps the `issue_comment` /
+`workflow_dispatch` triggers. `token` and `ssh` (`DOCUMENTER_KEY`) come from
+`secrets: inherit`.
+
+| Input | Type | Default | Description |
+|---|---|---|---|
+| `subdir` | string | `""` | Package subdirectory to tag (e.g. `lib/Foo` for a sublibrary); empty for the root. |
+| `lookback` | string | `"3"` | TagBot lookback window in days (manual `workflow_dispatch` runs). |
+
+```yaml
+# .github/workflows/TagBot.yml
+name: TagBot
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+jobs:
+  tagbot:
+    uses: "SciML/.github/.github/workflows/tagbot.yml@v1"
+    secrets: "inherit"
+```
+
+Monorepo (tag the root + each sublibrary):
+
+```yaml
+jobs:
+  tagbot:
+    uses: "SciML/.github/.github/workflows/tagbot.yml@v1"
+    secrets: "inherit"
+  tagbot-sublibraries:
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [lib/Foo, lib/Bar]
+    uses: "SciML/.github/.github/workflows/tagbot.yml@v1"
+    with:
+      subdir: "${{ matrix.package }}"
+    secrets: "inherit"
+```
+
+### `dependabot-automerge.yml`
+
+Auto-approves and enables auto-merge on Dependabot PRs matching the configured
+update types / ecosystems. GitHub still requires the PR's status checks to pass
+before merging, so only green PRs fast-track. The repo must have **auto-merge
+enabled** (ideally with required status checks via branch protection).
+
+| Input | Type | Default | Description |
+|---|---|---|---|
+| `update-types` | string | `"version-update:semver-patch,version-update:semver-minor"` | Dependabot update types to auto-merge. |
+| `ecosystems` | string | `""` | Comma-separated `package-ecosystem`s to restrict to (e.g. `github-actions`); empty = any. |
+| `merge-method` | string | `"squash"` | `squash`, `merge`, or `rebase`. |
+
+```yaml
+# .github/workflows/DependabotAutoMerge.yml
+name: Dependabot Auto-merge
+on: pull_request
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  automerge:
+    uses: "SciML/.github/.github/workflows/dependabot-automerge.yml@v1"
+    secrets: "inherit"
+```
+
+### `docs-preview-cleanup.yml`
+
+Deletes a closed PR's [Documenter](https://documenter.juliadocs.org/) preview
+from the docs branch and squashes that branch's history to one commit so it
+doesn't grow unbounded ([Documenter's `DocPreviewCleanup`](https://documenter.juliadocs.org/stable/man/hosting/)).
+
+| Input | Type | Default | Description |
+|---|---|---|---|
+| `preview-branch` | string | `"gh-pages"` | Branch the docs/previews live on. |
+| `preview-dir-root` | string | `"previews"` | Per-PR preview is `<root>/PR<number>`. |
+
+```yaml
+# .github/workflows/DocPreviewCleanup.yml
+name: Doc Preview Cleanup
+on:
+  pull_request:
+    types: [closed]
+permissions:
+  contents: write
+jobs:
+  cleanup:
+    uses: "SciML/.github/.github/workflows/docs-preview-cleanup.yml@v1"
+    secrets: "inherit"
+```
 
 ### `major-version-tag.yml`
 
@@ -581,6 +687,13 @@ jobs:
 Merge to `master`, then tag a semver release; `major-version-tag.yml` moves
 `@v1` for you. Full process in [`RELEASING.md`](RELEASING.md). Breaking changes
 get a new major (`v2.0.0`) so `@v1` consumers aren't disrupted.
+
+This repo has its own CI (`ci.yml`): [`actionlint`](https://github.com/rhysd/actionlint)
+(which bundles `shellcheck`) lints every workflow and the shell in their `run:`
+steps, and a Julia test suite (`test/runtests.jl`) covers
+`scripts/compute_affected_sublibraries.jl` (the sublibrary affected-set
+detection). Keep both green when changing workflows or the script — they ship
+to the whole org via `@v1`.
 
 ---
 

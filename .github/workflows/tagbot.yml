@@ -1,0 +1,48 @@
+name: "Reusable TagBot Workflow"
+
+# Creates GitHub releases/tags when a package is registered, via
+# JuliaRegistries/TagBot. Tags one package: the root, or a monorepo
+# sublibrary when `subdir` is set. The caller keeps the issue_comment /
+# workflow_dispatch triggers (TagBot is driven by the registrator comment);
+# a monorepo caller matrixes over its lib/* and calls this once per subdir.
+
+on:
+  workflow_call:
+    inputs:
+      subdir:
+        description: "Package subdirectory to tag (e.g. lib/Foo for a monorepo sublibrary); empty for the root package."
+        default: ""
+        required: false
+        type: string
+      lookback:
+        description: "TagBot lookback window in days (used on manual workflow_dispatch runs)."
+        default: "3"
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  checks: read
+  contents: write
+  deployments: read
+  issues: read
+  discussions: read
+  packages: read
+  pages: read
+  pull-requests: read
+  repository-projects: read
+  security-events: read
+  statuses: read
+
+jobs:
+  tagbot:
+    if: github.event_name == 'workflow_dispatch' || github.actor == 'JuliaTagBot'
+    runs-on: ubuntu-latest
+    steps:
+      - name: "TagBot${{ inputs.subdir != '' && format(' ({0})', inputs.subdir) || '' }}"
+        uses: JuliaRegistries/TagBot@v1
+        with:
+          token: "${{ secrets.GITHUB_TOKEN }}"
+          ssh: "${{ secrets.DOCUMENTER_KEY }}"
+          subdir: "${{ inputs.subdir }}"
+          lookback: "${{ inputs.lookback }}"

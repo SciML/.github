@@ -1,0 +1,51 @@
+name: "Reusable Dependabot Auto-merge Workflow"
+
+# Auto-approves and enables auto-merge on Dependabot PRs that match the
+# configured update types / ecosystems. GitHub still requires the PR's status
+# checks to pass before the merge happens, so this only fast-tracks green PRs.
+# The caller triggers on pull_request and must grant contents+pull-requests
+# write (and the repo must have auto-merge enabled).
+
+on:
+  workflow_call:
+    inputs:
+      update-types:
+        description: "Comma-separated Dependabot update types to auto-merge (version-update:semver-patch / -minor / -major)."
+        default: "version-update:semver-patch,version-update:semver-minor"
+        required: false
+        type: string
+      ecosystems:
+        description: "Comma-separated package-ecosystems to restrict auto-merge to (e.g. 'github-actions'). Empty = any ecosystem."
+        default: ""
+        required: false
+        type: string
+      merge-method:
+        description: "Merge method: squash, merge, or rebase."
+        default: "squash"
+        required: false
+        type: string
+
+jobs:
+  automerge:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: "Fetch Dependabot metadata"
+        id: meta
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+      - name: "Approve and enable auto-merge"
+        if: >-
+          contains(inputs.update-types, steps.meta.outputs.update-type) &&
+          (inputs.ecosystems == '' || contains(inputs.ecosystems, steps.meta.outputs.package-ecosystem))
+        env:
+          PR_URL: "${{ github.event.pull_request.html_url }}"
+          GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          MERGE_METHOD: "${{ inputs.merge-method }}"
+        run: |
+          gh pr review --approve "$PR_URL"
+          gh pr merge --auto "--$MERGE_METHOD" "$PR_URL"

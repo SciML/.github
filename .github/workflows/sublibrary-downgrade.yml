@@ -69,7 +69,8 @@ jobs:
               $skipit || projects+=("$d")
             done
           fi
-          json=$(printf '%s\n' "${projects[@]}" | grep . | python3 -c 'import sys,json; print(json.dumps([l.strip() for l in sys.stdin if l.strip()]))')
+          # jq is preinstalled on GitHub-hosted runners; don't assume python3.
+          json=$(printf '%s\n' "${projects[@]}" | grep . | jq -R . | jq -sc .)
           echo "Sublibraries: $json"
           echo "projects=$json" >> "$GITHUB_OUTPUT"
           [ "$json" = "[]" ] && echo "has_any=false" >> "$GITHUB_OUTPUT" || echo "has_any=true" >> "$GITHUB_OUTPUT"

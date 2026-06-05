@@ -1,0 +1,88 @@
+name: "Reusable Sublibrary CI (project model)"
+
+# Lists every lib/<name> sublibrary with a Project.toml and runs each one's
+# test suite via the reusable tests.yml workflow (project: lib/<name>).
+# tests.yml transitively git-develops the sublibrary's in-repo [sources] path
+# deps, so no root runtests.jl GROUP dispatcher is needed in the calling repo.
+#
+# Contrast sublibrary-tests.yml, which uses GROUP dispatch + dependency-graph
+# change detection and suits very large monorepos (e.g. OrdinaryDiffEq); this
+# project-model workflow tests every sublibrary on every run and suits the
+# smaller monorepos.
+#
+# Caller (per repo) only supplies its branch triggers + concurrency:
+#
+#   jobs:
+#     sublibraries:
+#       uses: SciML/.github/.github/workflows/sublibrary-project-tests.yml@v1
+#       secrets: inherit
+
+on:
+  workflow_call:
+    inputs:
+      julia-version:
+        description: "Julia version for each sublibrary test run"
+        default: "1"
+        required: false
+        type: string
+      coverage:
+        description: "Collect per-sublibrary coverage (uploaded with directories pointed at lib/<name>)"
+        default: true
+        required: false
+        type: boolean
+      self-hosted:
+        description: "Run the sublibrary test jobs on a self-hosted runner"
+        default: false
+        required: false
+        type: boolean
+      os:
+        description: "Runner OS for the sublibrary test jobs (ignored when self-hosted)"
+        default: "ubuntu-latest"
+        required: false
+        type: string
+      num-threads:
+        description: "JULIA_NUM_THREADS for each sublibrary test run (see tests.yml)"
+        default: "auto"
+        required: false
+        type: string
+
+jobs:
+  list-sublibraries:
+    runs-on: ubuntu-latest
+    outputs:
+      projects: ${{ steps.list.outputs.projects }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: "List lib/* sublibraries"
+        id: list
+        run: |
+          # Build the JSON array in pure shell -- neither jq nor python3 is
+          # guaranteed on the runner. lib/* names have no JSON-special
+          # characters, so plain quoting is safe; yields [] when none match.
+          projects=""
+          for d in lib/*/; do
+            d="${d%/}"
+            [ -f "$d/Project.toml" ] || continue
+            if [ -z "$projects" ]; then projects="\"$d\""; else projects="$projects,\"$d\""; fi
+          done
+          projects="[$projects]"
+          echo "Sublibraries: $projects"
+          echo "projects=$projects" >> "$GITHUB_OUTPUT"
+
+  test:
+    needs: list-sublibraries
+    strategy:
+      fail-fast: false
+      matrix:
+        project: ${{ fromJson(needs.list-sublibraries.outputs.projects) }}
+    name: "Sublibrary - ${{ matrix.project }}"
+    uses: "SciML/.github/.github/workflows/tests.yml@v1"
+    with:
+      project: "${{ matrix.project }}"
+      julia-version: "${{ inputs.julia-version }}"
+      coverage: ${{ inputs.coverage }}
+      coverage-directories: "${{ matrix.project }}/src,${{ matrix.project }}/ext"
+      self-hosted: ${{ inputs.self-hosted }}
+      os: "${{ inputs.os }}"
+      num-threads: "${{ inputs.num-threads }}"
+    secrets: "inherit"

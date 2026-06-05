@@ -274,6 +274,11 @@ jobs:
     secrets: "inherit"
 ```
 
+> **Runic exemptions (do not roll Runic out to these):** **JumpProcesses.jl**
+> and **Catalyst.jl** are exempt from Runic at the maintainer's (Sam Isaacson)
+> request — they stay on their own JuliaFormatter (`Format`) setup. Don't add
+> `runic.yml` to these repos or reformat them with Runic.
+
 ### `format-check.yml` / `format-suggestions-on-pr.yml`
 
 [JuliaFormatter](https://github.com/domluna/JuliaFormatter.jl)-based

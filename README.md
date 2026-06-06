@@ -225,6 +225,7 @@ to catch under-specified `[compat]` lower bounds.
 | `group` | string | `""` | Test group. |
 | `skip` | string | `"Pkg,TOML"` | Comma-separated deps to skip when downgrading. |
 | `projects` | string | `"."` | Comma-separated project dirs to downgrade. |
+| `project` | string | `"@."` | `--project` for build/test (a workspace submodule or `lib/X`); default tests the repo root. |
 | `allow-reresolve` | boolean | `false` | Let Pkg relax the downgraded env when running tests. |
 | `self-hosted` / `os` | | `false` / `ubuntu-latest` | Runner selection. |
 

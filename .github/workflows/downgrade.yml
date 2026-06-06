@@ -23,6 +23,11 @@ on:
         default: "."
         required: false
         type: string
+      project:
+        description: "Value passed to --project for build & test (e.g. a workspace submodule or lib/X). Default '@.' builds/tests the repo root."
+        default: "@."
+        required: false
+        type: string
       mode:
         description: "julia-downgrade-compat mode: deps (direct), alldeps (deps+weakdeps), weakdeps, or forcedeps (strict lower-bound verification). Empty uses the action default."
         default: ""
@@ -62,9 +67,12 @@ jobs:
           mode: "${{ inputs.mode }}"
 
       - uses: julia-actions/julia-buildpkg@v1
+        with:
+          project: "${{ inputs.project }}"
 
       - uses: julia-actions/julia-runtest@v1
         with:
+          project: "${{ inputs.project }}"
           allow_reresolve: "${{ inputs.allow-reresolve }}"
         env:
           GROUP: "${{ inputs.group }}"

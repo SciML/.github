@@ -29,8 +29,8 @@ on:
         required: false
         type: string
       mode:
-        description: "julia-downgrade-compat mode: deps (direct), alldeps (deps+weakdeps), weakdeps, or forcedeps (strict lower-bound verification). Empty uses the action default."
-        default: ""
+        description: "julia-downgrade-compat mode: deps (direct), alldeps (deps+weakdeps), weakdeps, or forcedeps (strict lower-bound verification). Empty maps to 'deps' (the action rejects an empty mode)."
+        default: "deps"
         required: false
         type: string
       allow-reresolve:
@@ -64,7 +64,7 @@ jobs:
         with:
           skip: "${{ inputs.skip }}"
           projects: "${{ inputs.projects }}"
-          mode: "${{ inputs.mode }}"
+          mode: "${{ inputs.mode != '' && inputs.mode || 'deps' }}"
 
       - uses: julia-actions/julia-buildpkg@v1
         with:

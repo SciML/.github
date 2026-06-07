@@ -27,11 +27,6 @@ on:
         default: ""
         required: false
         type: string
-      allow-reresolve:
-        description: "Allow the test environment to resolve transitive/test-only deps the downgrade step does not lock"
-        default: true
-        required: false
-        type: boolean
       group-env-name:
         description: "Optional env var name to set as the test group for each sublibrary (e.g. ODEDIFFEQ_TEST_GROUP)"
         default: ""
@@ -109,4 +104,4 @@ jobs:
       - uses: julia-actions/julia-runtest@v1
         with:
           project: ${{ matrix.project }}
-          allow_reresolve: ${{ inputs.allow-reresolve }}
+          allow_reresolve: false

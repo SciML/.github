@@ -33,11 +33,6 @@ on:
         default: "deps"
         required: false
         type: string
-      allow-reresolve:
-        description: "Allow Pkg to re-resolve (and thus relax) the downgraded environment when running tests"
-        default: false
-        required: false
-        type: boolean
       self-hosted:
         description: "Run the job on a self hosted machine"
         default: false
@@ -73,6 +68,6 @@ jobs:
       - uses: julia-actions/julia-runtest@v1
         with:
           project: "${{ inputs.project }}"
-          allow_reresolve: "${{ inputs.allow-reresolve }}"
+          allow_reresolve: false
         env:
           GROUP: "${{ inputs.group }}"

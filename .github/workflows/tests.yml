@@ -197,7 +197,7 @@ jobs:
           directories: "${{ inputs.coverage-directories }}"
 
       - name: "Report Coverage with Codecov"
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         if: "${{ inputs.coverage }}"
         with:
           files: lcov.info

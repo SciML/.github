@@ -222,7 +222,7 @@ to catch under-specified `[compat]` lower bounds.
 
 | Input | Type | Default | Description |
 |---|---|---|---|
-| `julia-version` | string | `"1.10"` | Julia version (the minimum-supported floor; see note). |
+| `julia-version` | string | `"lts"` | Julia version: the LTS alias (currently 1.10), tracking the LTS as it advances (the minimum-supported floor; see note). |
 | `group` | string | `""` | Test group. |
 | `skip` | string | `""` | **Additional** deps to skip when downgrading, beyond the auto-included Julia stdlibs (see note). |
 | `projects` | string | `"."` | Comma-separated project dirs to downgrade. |
@@ -240,8 +240,9 @@ jobs:
 > false` and exposes **no `allow-reresolve` input**. The `skip` list is
 > **auto-populated** with all Julia stdlibs, so callers no longer hand-list
 > `Pkg,TOML,Statistics,…` — pass `skip` only for genuinely-extra deps. The
-> caller-facing `julia-version` default is the **1.10** minimum-supported floor.
-> (Auto-skip and the `1.10` default land via
+> caller-facing `julia-version` default is **`"lts"`**, the LTS alias (currently
+> 1.10), tracking the LTS as it advances.
+> (Auto-skip and the `lts` default land via
 > [SciML/.github #73](https://github.com/SciML/.github/pull/73); strict
 > `allow_reresolve: false` is already in effect.)
 
@@ -561,7 +562,7 @@ Downgrade-compat tests for each `lib/*` sublibrary.
 
 | Input | Type | Default | Description |
 |---|---|---|---|
-| `julia-version` | string | `"1.10"` | Julia version (the minimum-supported floor; see note). |
+| `julia-version` | string | `"lts"` | Julia version: the LTS alias (currently 1.10), tracking the LTS as it advances (the minimum-supported floor; see note). |
 | `skip` | string | `""` | **Additional** deps to skip when downgrading, beyond the auto-included Julia stdlibs and in-repo `lib/*` sublibrary names (see note). |
 | `projects` | string | `""` | Explicit space-separated `lib/*` paths; empty = auto-discover all. |
 | `exclude` | string | `""` | Space-separated sublibrary names to exclude from auto-discovery. |
@@ -580,8 +581,9 @@ jobs:
 > **auto-populated** with all Julia stdlibs plus the in-repo `lib/*` sublibrary
 > names (path-`[sources]` packages must not be downgrade-pinned), so callers no
 > longer hand-list them — pass `skip` only for genuinely-extra deps. The
-> caller-facing `julia-version` default is the **1.10** minimum-supported floor.
-> (Auto-skip and the `1.10` default land via
+> caller-facing `julia-version` default is **`"lts"`**, the LTS alias (currently
+> 1.10), tracking the LTS as it advances.
+> (Auto-skip and the `lts` default land via
 > [SciML/.github #73](https://github.com/SciML/.github/pull/73); strict
 > `allow_reresolve: false` is already in effect.)
 

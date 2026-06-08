@@ -25,8 +25,8 @@ the target conventions below, not the transitional state. The in-flight work:
   reusable downgrade workflows (`downgrade.yml`, `sublibrary-downgrade.yml`)
   **auto-populate the `skip` list** (Julia stdlibs + in-repo `lib/*` sublibrary
   names + any caller-supplied extras), so callers stop hand-listing them, and
-  change the caller-facing `julia-version` default to the **1.10** minimum-
-  supported floor (§6).
+  change the caller-facing `julia-version` default to **`"lts"`**, the LTS alias
+  (currently 1.10), tracking the LTS as it advances (§6).
 - **The monorepo version-matrix update** — `test_groups.toml` and the root CI
   matrices move to the standard sets in §5 (`["lts","1","pre"]` for base/`Core`
   groups; `["lts","1"]` for `QA`; `["1"]` for `GPU`). OrdinaryDiffEq is being
@@ -532,7 +532,7 @@ jobs:
     uses: "SciML/.github/.github/workflows/sublibrary-downgrade.yml@v1"
     secrets: "inherit"
     with:
-      julia-version: "1.10"
+      julia-version: "lts"
       group-env-name: "ODEDIFFEQ_TEST_GROUP"
       group-env-value: "Core"
 ```
@@ -540,8 +540,9 @@ jobs:
 The reusable workflow **auto-discovers every `lib/<Name>` with a Project.toml**
 and downgrade-tests each. Note the caller above carries **no `skip` list**:
 
-- **`julia-version: "1.10"`** — downgrade runs on the minimum-supported Julia
-  floor, which is **1.10** across SciML (not `1.11`).
+- **`julia-version: "lts"`** — downgrade runs on the minimum-supported Julia
+  floor via the LTS alias (currently 1.10), tracking the LTS as it advances
+  (not `1.11`).
 - **The `skip` list is auto-populated by the reusable workflow.** It unions the
   full set of Julia standard libraries with the in-repo `lib/*` sublibrary names
   (in-repo path-`[sources]` packages must never be downgrade-pinned) and adds
@@ -562,17 +563,18 @@ jobs:
     name: "Downgrade"
     uses: "SciML/.github/.github/workflows/downgrade.yml@v1"
     with:
-      julia-version: "1.10"
+      julia-version: "lts"
       group: "InterfaceI"
     secrets: "inherit"
 ```
 
-Same conventions as the sublibrary downgrade: **`julia-version: "1.10"`** (the
-minimum-supported floor), **the `skip` list is auto-populated** with the Julia
-stdlibs (the root caller no longer hand-lists `Pkg,TOML,Statistics,…`; pass
-`skip` only for genuinely-extra deps), and the reusable `downgrade.yml`
-**hardcodes `allow_reresolve: false`** with no input. (Auto-skip and the 1.10
-default land via [SciML/.github #73](https://github.com/SciML/.github/pull/73).)
+Same conventions as the sublibrary downgrade: **`julia-version: "lts"`** (the
+LTS alias, currently 1.10, tracking the LTS as it advances), **the `skip` list
+is auto-populated** with the Julia stdlibs (the root caller no longer hand-lists
+`Pkg,TOML,Statistics,…`; pass `skip` only for genuinely-extra deps), and the
+reusable `downgrade.yml` **hardcodes `allow_reresolve: false`** with no input.
+(Auto-skip and the `lts` default land via
+[SciML/.github #73](https://github.com/SciML/.github/pull/73).)
 
 ### `CI.yml` (root suite, group-dispatched)
 
@@ -803,9 +805,9 @@ should use **Runic**; only these two legacy repos are on JuliaFormatter.
       the same sets. No `GPU.yml`.
 - [ ] Workflows are thin `@v1` callers with `secrets: "inherit"`:
       `SublibraryCI` (`group-env-name`, `check-bounds: auto`),
-      `DowngradeSublibraries` (`julia-version: "1.10"`, no hand-listed `skip` —
+      `DowngradeSublibraries` (`julia-version: "lts"`, no hand-listed `skip` —
       auto-populated), `CI` (group-dispatched), `Downgrade`
-      (`julia-version: "1.10"`, auto-`skip`), `Documentation`, `Downstream`,
+      (`julia-version: "lts"`, auto-`skip`), `Documentation`, `Downstream`,
       `FormatCheck`/`RunicSuggestions`, `SpellCheck`, `TagBot` (thin caller of
       `tagbot.yml@v1`: root `tagbot` job + `tagbot-subpackages` matrix with
       `subdir: lib/<pkg>`; single-package repos have only the root job),

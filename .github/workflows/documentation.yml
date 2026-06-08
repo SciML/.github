@@ -75,13 +75,13 @@ jobs:
           token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: "Install Dependencies"
-        run: julia --project=docs/ -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
+        run: julia --color=yes --project=docs/ -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
 
       - name: "Build and Deploy Documentation"
         env:
           GITHUB_TOKEN: ${{ inputs.github-token || secrets.GITHUB_TOKEN }}
           DOCUMENTER_KEY: ${{ inputs.documenter-key || secrets.DOCUMENTER_KEY }}
-        run: ${{ inputs.debug-documenter && 'JULIA_DEBUG="Documenter"' || '' }} julia --project=docs/ ${{ inputs.coverage && '--code-coverage=user' || '' }} docs/make.jl
+        run: ${{ inputs.debug-documenter && 'JULIA_DEBUG="Documenter"' || '' }} julia --color=yes --project=docs/ ${{ inputs.coverage && '--code-coverage=user' || '' }} docs/make.jl
 
       - uses: julia-actions/julia-processcoverage@v1
         if: "${{ inputs.coverage }}"

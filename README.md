@@ -30,6 +30,7 @@ Two things live here:
     [`docs-preview-cleanup.yml`](#docs-preview-cleanupyml) ·
     [`major-version-tag.yml`](#major-version-tagyml)
 - [Monorepos: sublibrary CI](#monorepos-sublibrary-ci)
+  - [Monorepo structure](#monorepo-structure) — full layout spec in [Monorepo.md](Monorepo.md)
   - [How sublibrary tests run](#how-sublibrary-tests-run)
   - [`test_groups.toml`](#test_groupstoml)
   - [Dependency-graph change detection](#dependency-graph-change-detection)
@@ -221,12 +222,11 @@ to catch under-specified `[compat]` lower bounds.
 
 | Input | Type | Default | Description |
 |---|---|---|---|
-| `julia-version` | string | `"lts"` | Julia version (downgrade is usually run on the oldest supported). |
+| `julia-version` | string | `"lts"` | Julia version: the LTS alias (currently 1.10), tracking the LTS as it advances (the minimum-supported floor; see note). |
 | `group` | string | `""` | Test group. |
-| `skip` | string | `"Pkg,TOML"` | Comma-separated deps to skip when downgrading. |
+| `skip` | string | `""` | **Additional** deps to skip when downgrading, beyond the auto-included Julia stdlibs (see note). |
 | `projects` | string | `"."` | Comma-separated project dirs to downgrade. |
 | `project` | string | `"@."` | `--project` for build/test (a workspace submodule or `lib/X`); default tests the repo root. |
-| `allow-reresolve` | boolean | `false` | Let Pkg relax the downgraded env when running tests. |
 | `self-hosted` / `os` | | `false` / `ubuntu-latest` | Runner selection. |
 
 ```yaml
@@ -235,6 +235,16 @@ jobs:
     uses: "SciML/.github/.github/workflows/downgrade.yml@v1"
     secrets: "inherit"
 ```
+
+> Downgrade is **strict**: the reusable workflow hardcodes `allow_reresolve:
+> false` and exposes **no `allow-reresolve` input**. The `skip` list is
+> **auto-populated** with all Julia stdlibs, so callers no longer hand-list
+> `Pkg,TOML,Statistics,…` — pass `skip` only for genuinely-extra deps. The
+> caller-facing `julia-version` default is **`"lts"`**, the LTS alias (currently
+> 1.10), tracking the LTS as it advances.
+> (Auto-skip and the `lts` default land via
+> [SciML/.github #73](https://github.com/SciML/.github/pull/73); strict
+> `allow_reresolve: false` is already in effect.)
 
 ### `documentation.yml`
 
@@ -287,7 +297,7 @@ jobs:
 
 [JuliaFormatter](https://github.com/domluna/JuliaFormatter.jl)-based
 alternatives, for repos not yet on Runic. `format-check.yml` fails on
-mis-format; `format-suggestions-on-pr.yml` posts formatting suggestions as PR
+misformatted files; `format-suggestions-on-pr.yml` posts formatting suggestions as PR
 comments. Inputs: `directory` (`"."`), `julia-version` (`"1"`),
 `juliaformatter-version` (`"2"`), `concurrent-jobs` (`false`),
 `cancel-in-progress` (`true`). **New repos should prefer `runic.yml`.**
@@ -425,6 +435,17 @@ its own `Project.toml` and `test/runtests.jl` (e.g. OrdinaryDiffEq,
 ModelingToolkit, Optimization, NonlinearSolve). Sublibrary CI runs each
 sublibrary's tests, and — crucially — only the ones a change actually affects.
 
+### Monorepo structure
+
+The full canonical layout — umbrella root + `lib/<Name>` packages, the
+`[sources]` dependency graph, the one-group-one-folder test structure with
+dependency-driven per-group `Project.toml`s, group naming and the
+`<REPO>_TEST_GROUP` env var, `test_groups.toml`, the thin `@v1` workflow set, and
+the standard repo files — is specified in **[Monorepo.md](Monorepo.md)**, the
+reference for setting up a new monorepo. The reference implementation is
+[SciML/OrdinaryDiffEq.jl](https://github.com/SciML/OrdinaryDiffEq.jl). The
+remainder of this section is the CI-mechanics summary.
+
 ### How sublibrary tests run
 
 `sublibrary-project-tests.yml` computes the **affected** sublibraries (see
@@ -442,7 +463,7 @@ optional `lib/<name>/test/test_groups.toml`:
 
 ```toml
 [Core]
-versions = ["lts", "1.11", "1", "pre"]
+versions = ["lts", "1", "pre"]
 
 [GPU]
 versions = ["1"]
@@ -450,7 +471,7 @@ runner = ["self-hosted", "Linux", "X64", "gpu"]
 timeout = 60
 
 [QA]
-versions = ["1"]
+versions = ["lts", "1"]
 ```
 
 Per-group fields:
@@ -463,8 +484,9 @@ Per-group fields:
 | `num_threads` | `1` | `JULIA_NUM_THREADS`. |
 | `local_only` | `false` | When `true`, skip this group if the sublibrary is in the matrix only because an upstream dependency changed (not its own files). For groups too expensive to run on every transitive rebuild. |
 
-**Default when there's no `test_groups.toml`:** `Core` on `["lts","1.11","1","pre"]`
-+ `QA` on `["1"]`.
+**Default when there's no `test_groups.toml`:** `Core` on `["lts","1","pre"]`
++ `QA` on `["lts","1"]`. (See [Monorepo.md](Monorepo.md#5-test_groupstoml) for the
+version-set rollout.)
 
 The group name reaches the sublibrary's `runtests.jl` through an env var. In the
 project model that var is `group-env-name` (default `GROUP`; OrdinaryDiffEq uses
@@ -540,11 +562,10 @@ Downgrade-compat tests for each `lib/*` sublibrary.
 
 | Input | Type | Default | Description |
 |---|---|---|---|
-| `julia-version` | string | `"lts"` | Julia version. |
-| `skip` | string | `"Pkg,TOML"` | Deps to skip when downgrading. |
+| `julia-version` | string | `"lts"` | Julia version: the LTS alias (currently 1.10), tracking the LTS as it advances (the minimum-supported floor; see note). |
+| `skip` | string | `""` | **Additional** deps to skip when downgrading, beyond the auto-included Julia stdlibs and in-repo `lib/*` sublibrary names (see note). |
 | `projects` | string | `""` | Explicit space-separated `lib/*` paths; empty = auto-discover all. |
 | `exclude` | string | `""` | Space-separated sublibrary names to exclude from auto-discovery. |
-| `allow-reresolve` | boolean | `true` | Resolve transitive/test-only deps the downgrade step doesn't lock. |
 | `group-env-name` | string | `""` | Optional group env var name (e.g. `ODEDIFFEQ_TEST_GROUP`). |
 | `group-env-value` | string | `""` | Value for `group-env-name`. |
 
@@ -554,6 +575,17 @@ jobs:
     uses: "SciML/.github/.github/workflows/sublibrary-downgrade.yml@v1"
     secrets: "inherit"
 ```
+
+> Downgrade is **strict**: the reusable workflow hardcodes `allow_reresolve:
+> false` and exposes **no `allow-reresolve` input**. The `skip` list is
+> **auto-populated** with all Julia stdlibs plus the in-repo `lib/*` sublibrary
+> names (path-`[sources]` packages must not be downgrade-pinned), so callers no
+> longer hand-list them — pass `skip` only for genuinely-extra deps. The
+> caller-facing `julia-version` default is **`"lts"`**, the LTS alias (currently
+> 1.10), tracking the LTS as it advances.
+> (Auto-skip and the `lts` default land via
+> [SciML/.github #73](https://github.com/SciML/.github/pull/73); strict
+> `allow_reresolve: false` is already in effect.)
 
 ---
 

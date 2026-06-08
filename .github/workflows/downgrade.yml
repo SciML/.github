@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       julia-version:
-        description: "Julia version (downgrade is usually run on the oldest supported version)"
+        description: "Julia version (downgrade tests the minimum-supported Julia floor; defaults to the LTS alias 'lts', currently 1.10, tracking the LTS as it advances)"
         default: "lts"
         required: false
         type: string
@@ -14,8 +14,8 @@ on:
         required: false
         type: string
       skip:
-        description: "Comma-separated list of packages to skip when downgrading compat (passed to julia-actions/julia-downgrade-compat)"
-        default: "Pkg,TOML"
+        description: "ADDITIONAL deps to skip when downgrading, beyond the auto-included Julia stdlibs (comma-separated; unioned into the effective skip passed to julia-actions/julia-downgrade-compat)"
+        default: ""
         required: false
         type: string
       projects:
@@ -55,9 +55,31 @@ jobs:
         with:
           version: "${{ inputs.julia-version }}"
 
+      - name: "Compute effective downgrade skip list"
+        run: |
+          # Effective skip = Julia stdlibs  ∪  the caller's `skip` input (extra
+          # skips). Standard libraries are always in-tree at their pinned
+          # version, so they must never be downgrade-pinned. Enumerate them
+          # robustly from Pkg (the dict is keyed by UUID, so take the NAME from
+          # each value; the value is (name, version) on recent Julia and a
+          # String on older).
+          stdlibs="$(julia --startup-file=no -e '
+            using Pkg
+            ns = String[]
+            for v in values(Pkg.Types.stdlibs())
+                push!(ns, v isa AbstractString ? v : first(v))
+            end
+            println(join(sort(unique(ns)), ","))
+          ')"
+          echo "Julia stdlibs: $stdlibs"
+          effective="$stdlibs"
+          [ -n "${{ inputs.skip }}" ] && effective="$effective,${{ inputs.skip }}"
+          echo "Effective downgrade skip: $effective"
+          echo "EFFECTIVE_SKIP=$effective" >> "$GITHUB_ENV"
+
       - uses: julia-actions/julia-downgrade-compat@v2
         with:
-          skip: "${{ inputs.skip }}"
+          skip: "${{ env.EFFECTIVE_SKIP }}"
           projects: "${{ inputs.projects }}"
           mode: "${{ inputs.mode != '' && inputs.mode || 'deps' }}"
 

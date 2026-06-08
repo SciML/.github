@@ -4,20 +4,43 @@ This is the reference specification for a **SciML monorepo**: a Julia package
 whose functionality is split across many independently-registered sub-packages
 living under `lib/<Name>/`, all in one Git repository, sharing one CI system.
 
-The canonical reference implementation is
-[**SciML/OrdinaryDiffEq.jl**](https://github.com/SciML/OrdinaryDiffEq.jl) — when
-in doubt, copy what it does. Other monorepos on this pattern include
-ModelingToolkit.jl, NonlinearSolve.jl, LinearSolve.jl, Optimization.jl,
-BoundaryValueDiffEq.jl, and RecursiveArrayTools.jl. The shared CI lives in
+[**SciML/OrdinaryDiffEq.jl**](https://github.com/SciML/OrdinaryDiffEq.jl) is the
+reference monorepo. Other monorepos on this pattern include ModelingToolkit.jl,
+NonlinearSolve.jl, LinearSolve.jl, Optimization.jl, BoundaryValueDiffEq.jl, and
+RecursiveArrayTools.jl. The shared CI lives in
 [SciML/.github](https://github.com/SciML/.github); the reusable workflows are
 consumed at the `@v1` moving tag (see the
 [README](README.md#versioning-the-v1-moving-tag)).
 
-Every concrete value, file shape, and snippet below is taken from the live
-`SciML/.github` `@v1` reusable workflows and from OrdinaryDiffEq.jl `master`.
+## Status / rollout
+
+**The conventions documented here are the target standards going forward.** They
+describe where the fleet is heading, not necessarily the byte-for-byte current
+state of any one repo. OrdinaryDiffEq.jl and the `@v1` reusable workflows are
+being migrated to them; while that migration is in progress some live repos
+(including OrdinaryDiffEq) may still show the previous form. Document and copy
+the target conventions below, not the transitional state. The in-flight work:
+
+- **[SciML/.github #73](https://github.com/SciML/.github/pull/73)** — the
+  reusable downgrade workflows (`downgrade.yml`, `sublibrary-downgrade.yml`)
+  **auto-populate the `skip` list** (Julia stdlibs + in-repo `lib/*` sublibrary
+  names + any caller-supplied extras), so callers stop hand-listing them, and
+  change the caller-facing `julia-version` default to the **1.10** minimum-
+  supported floor (§6).
+- **The monorepo version-matrix update** — `test_groups.toml` and the root CI
+  matrices move to the standard sets in §5 (`["lts","1","pre"]` for base/`Core`
+  groups; `["lts","1"]` for `QA`; `["1"]` for `GPU`). OrdinaryDiffEq is being
+  updated to these.
+- **The fleet TagBot thin-caller conversion** — every repo's `TagBot.yml`
+  becomes a thin caller of `tagbot.yml@v1` (root + a subpackages matrix for
+  monorepos), replacing the inlined `JuliaRegistries/TagBot@v1` steps (§6).
+
+Where a value below differs from what you currently see in OrdinaryDiffEq.jl
+`master`, the value below is the one to adopt.
 
 ## Table of contents
 
+0. [Status / rollout](#status--rollout)
 1. [Repository layout](#1-repository-layout)
 2. [The `[sources]` dependency graph](#2-the-sources-dependency-graph)
 3. [Test structure: one group, one folder](#3-test-structure-one-group-one-folder)
@@ -313,7 +336,14 @@ breaks `Pkg.test`'s standard test-dependency resolution. The *only* test
 - Standard groups are **capitalized**: `All`, `Core`, `QA`.
 - Custom groups are **Title-case**: `InterfaceI`, `Integrators_I`,
   `AlgConvergence_II`, `ModelingToolkit`, `Downstream`, `GPU`.
-- The default when no group is set is **`All`**.
+- The default when no group is set is **`All`** (Title-case, *not* `ALL`).
+
+`All` is the **local-only catch-all sentinel**: it is the default a `runtests.jl`
+falls back to when the test-group env var is unset, so that running the suite by
+hand (no env var) exercises every in-env group. **CI never sets `All`** — the
+reusable CI always passes a concrete group name (`Core`, `QA`, `GPU`, a custom
+group, …). Write it as `"All"` everywhere, with this exact Title-casing, so the
+fallback matches the `GROUP == "All"` branches.
 
 **Never** read the group through `lowercase(get(ENV, ...))`. The group string is
 compared as-is, in its canonical case.
@@ -337,7 +367,7 @@ for dep-adding groups and running base groups in place. From
 using Pkg
 using SafeTestsets
 
-const TEST_GROUP = get(ENV, "ODEDIFFEQ_TEST_GROUP", "ALL")
+const TEST_GROUP = get(ENV, "ODEDIFFEQ_TEST_GROUP", "All")
 
 function activate_qa_env()
     Pkg.activate(joinpath(@__DIR__, "qa"))
@@ -349,13 +379,13 @@ if TEST_GROUP == "GPU"
     @time @safetestset "Simple GPU" include("gpu/simple_gpu.jl")
 end
 
-if (TEST_GROUP == "QA" || TEST_GROUP == "ALL") && isempty(VERSION.prerelease)
+if (TEST_GROUP == "QA" || TEST_GROUP == "All") && isempty(VERSION.prerelease)
     activate_qa_env()
     @time @safetestset "JET Tests" include("qa/jet.jl")
     @time @safetestset "Aqua" include("qa/qa.jl")
 end
 
-if TEST_GROUP == "Core" || TEST_GROUP == "ALL"
+if TEST_GROUP == "Core" || TEST_GROUP == "All"
     @time @safetestset "Discontinuity Detection" include("disco_tests.jl")
 end
 ```
@@ -409,11 +439,11 @@ Each sublibrary may declare its group matrix in
 sublibrary into one CI job per `(group × version)`. `versions` is **required**
 per group; `runner`, `timeout`, and `num_threads` are optional.
 
-From `lib/OrdinaryDiffEqCore/test/test_groups.toml`:
+Target `test_groups.toml` for a sublibrary like `OrdinaryDiffEqCore`:
 
 ```toml
 [Core]
-versions = ["lts", "1.11", "1", "pre"]
+versions = ["lts", "1", "pre"]
 
 [GPU]
 versions = ["1"]
@@ -421,7 +451,7 @@ runner = ["self-hosted", "Linux", "X64", "gpu"]
 timeout = 60
 
 [QA]
-versions = ["1"]
+versions = ["lts", "1"]
 ```
 
 | Field | Required? | Default | Meaning |
@@ -434,15 +464,21 @@ versions = ["1"]
 
 ### Version convention
 
-The established version sets (verified against OrdinaryDiffEq's `test_groups.toml`
-files and the detection script's defaults):
+The target version sets — used both in each `test_groups.toml` and in the root
+CI matrices (§6) — are:
 
-- **Standard / `Core` (base) groups:** `["lts", "1.11", "1", "pre"]`.
-- **`QA` groups:** `["1"]`.
+- **Standard / `Core` (base) groups:** `["lts", "1", "pre"]` — the long-term-
+  support release, the current stable release, and the prerelease channel.
+- **`QA` groups:** `["lts", "1"]`.
 - **`GPU` groups:** `["1"]`.
 
+These replace the previous `Core = ["lts", "1.11", "1", "pre"]` (the pinned
+`"1.11"` middle version is dropped) and `QA = ["1"]` (QA now also runs on `lts`).
+OrdinaryDiffEq is being migrated to these sets; until that lands its live files
+may still show the old form.
+
 If a sublibrary has **no `test_groups.toml`**, the CI applies the default
-`Core` on `["lts", "1.11", "1", "pre"]` + `QA` on `["1"]`.
+`Core` on `["lts", "1", "pre"]` + `QA` on `["lts", "1"]`.
 
 > Note: downstream (reverse-dependency-affected) sublibraries are always run on
 > the single latest-stable version `"1"` regardless of their declared
@@ -467,7 +503,8 @@ group from `test_groups.toml` and schedules it on the GPU runner.
 Every workflow in `.github/workflows/` is a **thin caller** that delegates to a
 reusable workflow in `SciML/.github` at `@v1`, with `secrets: "inherit"`. Do not
 inline build/test steps, permissions, or matrices that a reusable workflow
-already owns. The canonical OrdinaryDiffEq set:
+already owns. The target set (the whole fleet, including OrdinaryDiffEq, is being
+converted to these thin-caller forms):
 
 ### `SublibraryCI.yml` → `sublibrary-project-tests.yml@v1`
 
@@ -495,20 +532,27 @@ jobs:
     uses: "SciML/.github/.github/workflows/sublibrary-downgrade.yml@v1"
     secrets: "inherit"
     with:
-      julia-version: "1.11"
-      skip: "Pkg,TOML,Statistics,LinearAlgebra,SparseArrays,InteractiveUtils,OrdinaryDiffEqCore,OrdinaryDiffEqNonlinearSolve,OrdinaryDiffEqDifferentiation"
+      julia-version: "1.10"
       group-env-name: "ODEDIFFEQ_TEST_GROUP"
       group-env-value: "Core"
 ```
 
 The reusable workflow **auto-discovers every `lib/<Name>` with a Project.toml**
-and downgrade-tests each. **Downgrade is strict fleet-wide:** the reusable
-workflow hardcodes `allow_reresolve: false` and exposes **no `allow-reresolve`
-input** — there is no per-repo opt-out. The `skip` input
-(default `"Pkg,TOML"`) is the comma-separated list of deps the downgrade step
-should not touch; a monorepo caller adds the stdlibs it uses and the in-repo
-sublibraries it doesn't want downgraded (as above). Use `exclude` to drop
-sublibraries from the auto-discovered set.
+and downgrade-tests each. Note the caller above carries **no `skip` list**:
+
+- **`julia-version: "1.10"`** — downgrade runs on the minimum-supported Julia
+  floor, which is **1.10** across SciML (not `1.11`).
+- **The `skip` list is auto-populated by the reusable workflow.** It unions the
+  full set of Julia standard libraries with the in-repo `lib/*` sublibrary names
+  (in-repo path-`[sources]` packages must never be downgrade-pinned) and adds
+  any extras the caller still passes via `skip`. **Callers no longer hand-list
+  stdlibs or sublibraries** — only pass `skip` for genuinely-extra deps, if any.
+  (Landing via [SciML/.github #73](https://github.com/SciML/.github/pull/73).)
+- **Downgrade is strict fleet-wide:** the reusable workflow **hardcodes
+  `allow_reresolve: false`** and exposes **no `allow-reresolve` input** — there
+  is no per-repo opt-out.
+
+Use `exclude` to drop sublibraries from the auto-discovered set.
 
 ### `Downgrade.yml` → `downgrade.yml@v1` (root package)
 
@@ -518,14 +562,17 @@ jobs:
     name: "Downgrade"
     uses: "SciML/.github/.github/workflows/downgrade.yml@v1"
     with:
-      julia-version: "1.11"
+      julia-version: "1.10"
       group: "InterfaceI"
-      skip: "Pkg,TOML,Statistics,LinearAlgebra,SparseArrays,InteractiveUtils"
     secrets: "inherit"
 ```
 
-Same strict policy: the reusable `downgrade.yml` hardcodes `allow_reresolve:
-false` with no input.
+Same conventions as the sublibrary downgrade: **`julia-version: "1.10"`** (the
+minimum-supported floor), **the `skip` list is auto-populated** with the Julia
+stdlibs (the root caller no longer hand-lists `Pkg,TOML,Statistics,…`; pass
+`skip` only for genuinely-extra deps), and the reusable `downgrade.yml`
+**hardcodes `allow_reresolve: false`** with no input. (Auto-skip and the 1.10
+default land via [SciML/.github #73](https://github.com/SciML/.github/pull/73).)
 
 ### `CI.yml` (root suite, group-dispatched)
 
@@ -533,7 +580,10 @@ The root suite is GROUP-dispatched: a matrix over the root test groups, each cel
 passing `GROUP: ${{ matrix.group }}` to `julia-actions/julia-runtest`, which the
 root `runtests.jl` dispatches on (§4). OrdinaryDiffEq's matrix groups are e.g.
 `InterfaceI…V`, `Integrators_I/II`, `AlgConvergence_I/II/III`, `ModelingToolkit`,
-`Downstream`, `QA`, `Regression_I/II`, `AD`, across versions `lts`/`1.11`/`1`/`pre`.
+`Downstream`, `QA`, `Regression_I/II`, `AD`. The root CI version matrix follows
+the same target set as `test_groups.toml` (§5): base groups across
+`lts`/`1`/`pre` and QA across `lts`/`1` (replacing the previous
+`lts`/`1.11`/`1`/`pre`).
 
 ### `Documentation.yml` → `documentation.yml@v1`
 
@@ -585,27 +635,35 @@ jobs:
     secrets: "inherit"
 ```
 
-### `TagBot.yml` → `tagbot.yml@v1` + a `TagBot-Subpackages` matrix
+### `TagBot.yml` → thin caller of `tagbot.yml@v1` (root + subpackages matrix)
 
-TagBot stays thin: a root job for the umbrella plus a matrix job that tags each
-**registered** `lib/<Name>` via the `subdir` input. Do **not** inline
-permissions/steps per package — list the package names in the matrix and let one
-templated step run per `subdir`. Shape (from OrdinaryDiffEq's `TagBot.yml`):
+TagBot is a **thin caller** of the reusable `tagbot.yml@v1`, exactly like every
+other workflow. Do **not** inline `permissions`, the `if`-guard, or
+`JuliaRegistries/TagBot@v1` steps — those all live in the reusable workflow. The
+caller only keeps the `issue_comment` / `workflow_dispatch` triggers (TagBot is
+driven by the JuliaRegistrator comment) and forwards `secrets: "inherit"`
+(`token` / `ssh` `DOCUMENTER_KEY` come through inherit).
+
+A **monorepo** caller has two jobs: one `tagbot` job for the umbrella root, plus
+a `tagbot-subpackages` matrix job that calls the same reusable workflow once per
+**registered** `lib/<Name>`, passing the path through the `subdir` input:
 
 ```yaml
+# .github/workflows/TagBot.yml
+name: TagBot
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      lookback:
+        default: "3"
 jobs:
-  TagBot-OrdinaryDiffEq:
-    if: github.event_name == 'workflow_dispatch' || github.actor == 'JuliaTagBot'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: JuliaRegistries/TagBot@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          ssh: ${{ secrets.DOCUMENTER_KEY }}
+  tagbot:
+    uses: "SciML/.github/.github/workflows/tagbot.yml@v1"
+    secrets: "inherit"
 
-  TagBot-Subpackages:
-    if: github.event_name == 'workflow_dispatch' || github.actor == 'JuliaTagBot'
-    runs-on: ubuntu-latest
+  tagbot-subpackages:
     strategy:
       fail-fast: false
       matrix:
@@ -613,13 +671,17 @@ jobs:
           - OrdinaryDiffEqCore
           - OrdinaryDiffEqBDF
           # ... every registered lib/<Name>
-    steps:
-      - uses: JuliaRegistries/TagBot@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          ssh: ${{ secrets.DOCUMENTER_KEY }}
-          subdir: "lib/${{ matrix.package }}"
+    uses: "SciML/.github/.github/workflows/tagbot.yml@v1"
+    with:
+      subdir: "lib/${{ matrix.package }}"
+    secrets: "inherit"
 ```
+
+A **single-package** repo has only the first job (the `tagbot` caller with
+`secrets: "inherit"`, no `subdir`); there is no subpackages matrix. The whole
+fleet, OrdinaryDiffEq included, is being converted from the previous inlined
+form (per-package `JuliaRegistries/TagBot@v1` steps) to this thin-caller form.
+See the [README `tagbot.yml`](README.md#tagbotyml) entry for the input table.
 
 ### `DependabotAutoMerge.yml` → `dependabot-automerge.yml@v1`
 
@@ -652,7 +714,7 @@ running `benchmark/benchmarks.jl`.
 |---|---|
 | `.codecov.yml` | `comment: false`. |
 | `.typos.toml` | `[default.extend-words]` listing domain terms `typos` must not "correct" — Julia API names (`eachindex`, `getu`, …), math terms (`jacobian`, `discretization`, `preconditioner`, …), and author surnames in citations (`Hairer`, `Wanner`, `Rodas5P`, …). |
-| `.gitignore` | Ignores `Manifest.toml`, `docs/build`, `LocalPreferences.toml`, `*.jl.cov` / `*.jl.*.cov` / `*.jl.mem`, and `.vscode`. |
+| `.gitignore` | Ignores resolved manifests, built docs, local prefs, coverage/profile artifacts, and editor/OS cruft — `Manifest.toml`, `docs/build`, `LocalPreferences.toml`, the `*.jl.cov` / `*.jl.*.cov` / `*.jl.mem` coverage files, `profile.pb.gz`, `.vscode`, `*.DS_Store`, `.*.swp`, and `.claude/`. |
 | `LICENSE.md` | One **per package**: at the root *and* in each `lib/<Name>/`. |
 
 The OrdinaryDiffEq `.codecov.yml` is exactly:
@@ -661,17 +723,21 @@ The OrdinaryDiffEq `.codecov.yml` is exactly:
 comment: false
 ```
 
-and `.gitignore`:
+A `.gitignore` with the typical SciML entries (order doesn't matter; a given repo
+may carry a superset):
 
 ```gitignore
+Manifest.toml
+docs/build
+LocalPreferences.toml
 *.jl.cov
 *.jl.*.cov
 *.jl.mem
-*.jl.*.mem
-Manifest.toml
 .vscode
-LocalPreferences.toml
-docs/build
+*.DS_Store
+profile.pb.gz
+.*.swp
+.claude/
 ```
 
 `.typos.toml` opens with:
@@ -729,18 +795,21 @@ should use **Runic**; only these two legacy repos are on JuliaFormatter.
       + extra deps + `Test`) and are excluded from `All`; QA in `test/qa`.
 - [ ] No top-level `test/Project.toml`.
 - [ ] Group names capitalized/Title-case; one shared `<REPO>_TEST_GROUP` env var
-      read by every `runtests.jl`; default `All`; never
-      `lowercase(get(ENV, ...))`.
+      read by every `runtests.jl`; default `"All"` (Title-case, local-only
+      sentinel — CI never sets it); never `lowercase(get(ENV, ...))`.
 - [ ] Root `runtests.jl` dispatches sublibrary groups (`_detect_sublibrary_group`).
-- [ ] `test_groups.toml` per sublibrary: Core `["lts","1.11","1","pre"]`,
-      QA `["1"]`, GPU `["1"]` + self-hosted GPU runner. No `GPU.yml`.
+- [ ] `test_groups.toml` per sublibrary (target sets): Core `["lts","1","pre"]`,
+      QA `["lts","1"]`, GPU `["1"]` + self-hosted GPU runner. Root CI matrix uses
+      the same sets. No `GPU.yml`.
 - [ ] Workflows are thin `@v1` callers with `secrets: "inherit"`:
       `SublibraryCI` (`group-env-name`, `check-bounds: auto`),
-      `DowngradeSublibraries`, `CI` (group-dispatched), `Downgrade`,
-      `Documentation`, `Downstream`, `FormatCheck`/`RunicSuggestions`,
-      `SpellCheck`, `TagBot` (root + `TagBot-Subpackages` matrix with
-      `subdir: lib/<pkg>`), `DependabotAutoMerge`, `DocPreviewCleanup`,
-      `benchmark`.
+      `DowngradeSublibraries` (`julia-version: "1.10"`, no hand-listed `skip` —
+      auto-populated), `CI` (group-dispatched), `Downgrade`
+      (`julia-version: "1.10"`, auto-`skip`), `Documentation`, `Downstream`,
+      `FormatCheck`/`RunicSuggestions`, `SpellCheck`, `TagBot` (thin caller of
+      `tagbot.yml@v1`: root `tagbot` job + `tagbot-subpackages` matrix with
+      `subdir: lib/<pkg>`; single-package repos have only the root job),
+      `DependabotAutoMerge`, `DocPreviewCleanup`, `benchmark`.
 - [ ] Repo files: `.codecov.yml` (`comment: false`), `.typos.toml`,
       `.gitignore`, per-package `LICENSE.md`.
 - [ ] Runic formatting (Catalyst/JumpProcesses excepted). No CompatHelper, no

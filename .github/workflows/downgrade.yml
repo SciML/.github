@@ -4,8 +4,8 @@ on:
   workflow_call:
     inputs:
       julia-version:
-        description: "Julia version (downgrade tests the minimum-supported Julia floor, 1.10 across SciML)"
-        default: "1.10"
+        description: "Julia version (downgrade tests the minimum-supported Julia floor; defaults to the LTS alias 'lts', currently 1.10, tracking the LTS as it advances)"
+        default: "lts"
         required: false
         type: string
       group:

@@ -8,13 +8,13 @@ on:
   workflow_call:
     inputs:
       julia-version:
-        description: "Julia version to run the downgrade tests on"
-        default: "lts"
+        description: "Julia version to run the downgrade tests on (downgrade tests the minimum-supported Julia floor, 1.10 across SciML)"
+        default: "1.10"
         required: false
         type: string
       skip:
-        description: "Comma-separated deps to skip when downgrading (passed to julia-downgrade-compat)"
-        default: "Pkg,TOML"
+        description: "ADDITIONAL deps to skip when downgrading, beyond the auto-included Julia stdlibs and in-repo lib/* sublibraries (comma-separated; unioned into the effective skip passed to julia-downgrade-compat)"
+        default: ""
         required: false
         type: string
       projects:
@@ -93,10 +93,45 @@ jobs:
       - name: "Set sublibrary test group"
         if: "${{ inputs.group-env-name != '' }}"
         run: echo "${{ inputs.group-env-name }}=${{ inputs.group-env-value }}" >> "$GITHUB_ENV"
+      - name: "Enumerate Julia standard libraries"
+        run: |
+          # Standard libraries are always in-tree at their pinned version, so
+          # they must never be downgrade-pinned. Enumerate them robustly from
+          # Pkg (the dict is keyed by UUID, so take the NAME from each value;
+          # the value is (name, version) on recent Julia and a String on older).
+          names="$(julia --startup-file=no -e '
+            using Pkg
+            ns = String[]
+            for v in values(Pkg.Types.stdlibs())
+                push!(ns, v isa AbstractString ? v : first(v))
+            end
+            println(join(sort(unique(ns)), ","))
+          ')"
+          echo "Julia stdlibs: $names"
+          echo "STDLIB_SKIP=$names" >> "$GITHUB_ENV"
+      - name: "Compute effective downgrade skip list"
+        run: |
+          # Effective skip = Julia stdlibs  ∪  in-repo lib/* sublibrary NAMES
+          #                  ∪  the caller's `skip` input (extra skips).
+          # In-repo path-[sources] sublibs must not be downgrade-pinned, so add
+          # every lib/<name> directory name to the skip set.
+          sublibs=""
+          for d in lib/*/; do
+            d="${d%/}"
+            [ -f "$d/Project.toml" ] || continue
+            name="$(basename "$d")"
+            if [ -z "$sublibs" ]; then sublibs="$name"; else sublibs="$sublibs,$name"; fi
+          done
+          echo "In-repo sublibraries: $sublibs"
+          effective="$STDLIB_SKIP"
+          [ -n "$sublibs" ] && effective="$effective,$sublibs"
+          [ -n "${{ inputs.skip }}" ] && effective="$effective,${{ inputs.skip }}"
+          echo "Effective downgrade skip: $effective"
+          echo "EFFECTIVE_SKIP=$effective" >> "$GITHUB_ENV"
       - uses: julia-actions/julia-downgrade-compat@v2
         with:
           projects: ${{ matrix.project }}
-          skip: ${{ inputs.skip }}
+          skip: ${{ env.EFFECTIVE_SKIP }}
           julia_version: ${{ inputs.julia-version }}
       - uses: julia-actions/julia-buildpkg@v1
         with:

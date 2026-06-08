@@ -22,6 +22,10 @@
 #
 # Optional fields per group:
 #   runner      — string or array of labels (default: "ubuntu-latest")
+#   os          — array of OS runners for an OS matrix (root matrix only; the
+#                 group runs once per OS, e.g. ["ubuntu-latest","windows-latest",
+#                 "macos-latest"]). Empty -> use `runner`. Don't combine with a
+#                 custom `runner`; if both set, the OS axis wins.
 #   timeout     — integer, job timeout in minutes (default: 120)
 #   num_threads — integer, JULIA_NUM_THREADS (default: 1)
 #   local_only  — boolean (default: false). When true, the group is skipped
@@ -144,6 +148,7 @@ struct TestGroupConfig
     num_threads::Int
     local_only::Bool
     continue_on_error::Bool
+    os::Vector{String}  # root matrix only: OS axis (group runs once per os); empty = use `runner`
 end
 
 function parse_test_group(config::AbstractDict)
@@ -154,7 +159,8 @@ function parse_test_group(config::AbstractDict)
     num_threads = Int(get(config, "num_threads", 1))
     local_only = Bool(get(config, "local_only", false))
     continue_on_error = Bool(get(config, "continue_on_error", false))
-    return TestGroupConfig(versions, runner, timeout, num_threads, local_only, continue_on_error)
+    os = convert(Vector{String}, get(config, "os", String[]))
+    return TestGroupConfig(versions, runner, timeout, num_threads, local_only, continue_on_error, os)
 end
 
 function load_test_groups(lib_dir::String, pkg::String)
@@ -164,7 +170,7 @@ function load_test_groups(lib_dir::String, pkg::String)
         return Dict{String, TestGroupConfig}(name => parse_test_group(config) for (name, config) in toml)
     end
     return Dict{String, TestGroupConfig}(
-        k => TestGroupConfig(v, "ubuntu-latest", 120, 1, false, false) for (k, v) in DEFAULT_TEST_GROUPS
+        k => TestGroupConfig(v, "ubuntu-latest", 120, 1, false, false, String[]) for (k, v) in DEFAULT_TEST_GROUPS
     )
 end
 
@@ -186,7 +192,7 @@ function load_root_test_groups(repo_root::String)
         isempty(groups) || return groups
     end
     return Dict{String, TestGroupConfig}(
-        k => TestGroupConfig(v, "ubuntu-latest", 120, 1, false, false) for (k, v) in DEFAULT_ROOT_GROUPS
+        k => TestGroupConfig(v, "ubuntu-latest", 120, 1, false, false, String[]) for (k, v) in DEFAULT_ROOT_GROUPS
     )
 end
 
@@ -349,24 +355,32 @@ function print_json(entries)
     return println("]")
 end
 
-# Root-package matrix: every group × every version it lists, with no diff
-# filtering (the root package runs all its groups on every push/PR). Carries
-# continue_on_error so a non-fatal group (e.g. OrdinaryDiffEq's Downstream) maps
-# to tests.yml's continue-on-error input.
+# Root-package matrix: every group × every version it lists × every OS it lists,
+# with no diff filtering (the root package runs all its groups on every
+# push/PR). Carries continue_on_error so a non-fatal group (e.g. OrdinaryDiffEq's
+# Downstream) maps to tests.yml's continue-on-error input. The OS axis: a group
+# with `os = ["ubuntu-latest", "windows-latest", ...]` runs once per OS (each
+# cell's runner is that OS string); otherwise the group's `runner` is used (a
+# string like "ubuntu-latest" or a custom self-hosted label array, e.g. GPU).
+# `os` and a custom `runner` are not meant to be combined; if both are set, the
+# OS axis wins.
 function build_root_matrix(repo_root::String)
     groups = load_root_test_groups(repo_root)
     entries = []
     for group_name in sort!(collect(keys(groups)))
         config = groups[group_name]
+        runners = isempty(config.os) ? Any[config.runner] : Any[o for o in config.os]
         for ver in config.versions
-            push!(
-                entries,
-                (;
-                    group = group_name, version = ver, runner = config.runner,
-                    timeout = config.timeout, num_threads = config.num_threads,
-                    continue_on_error = config.continue_on_error,
+            for runner in runners
+                push!(
+                    entries,
+                    (;
+                        group = group_name, version = ver, runner = runner,
+                        timeout = config.timeout, num_threads = config.num_threads,
+                        continue_on_error = config.continue_on_error,
+                    )
                 )
-            )
+            end
         end
     end
     return entries

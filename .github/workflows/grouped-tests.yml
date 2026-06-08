@@ -2,9 +2,10 @@ name: "Reusable Grouped Tests Workflow (test_groups.toml)"
 
 # Runs a package's OWN test groups, declared once in test/test_groups.toml, via
 # the reusable tests.yml workflow (project: '.'). Each group runs on every Julia
-# version it lists, carrying its per-group runner / timeout / num_threads /
-# continue_on_error, dispatched through a group env var (default GROUP) that the
-# package's runtests.jl reads. This replaces a hand-maintained group × version
+# version it lists (and, if the group sets an `os` list, once per OS), carrying
+# its per-group runner / timeout / num_threads / continue_on_error, dispatched
+# through a group env var (default GROUP) that the package's runtests.jl reads.
+# This replaces a hand-maintained group × version (× os)
 # matrix embedded in the caller's CI.yml: the matrix lives in test_groups.toml
 # and CI.yml becomes a thin caller. The matrix is computed by
 # scripts/compute_affected_sublibraries.jl --root-matrix.
@@ -93,7 +94,7 @@ jobs:
       fail-fast: false
       matrix:
         include: ${{ fromJson(needs.detect.outputs.matrix) }}
-    name: "${{ matrix.group }} (julia ${{ matrix.version }})"
+    name: "${{ matrix.group }} (julia ${{ matrix.version }}, ${{ join(matrix.runner, ' ') }})"
     uses: "SciML/.github/.github/workflows/tests.yml@v1"
     with:
       project: "."

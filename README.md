@@ -488,6 +488,7 @@ Per-group fields:
 |---|---|---|
 | `versions` | — | Julia versions to run this group on. |
 | `runner` | `"ubuntu-latest"` | `runs-on` string or label array (e.g. a GPU self-hosted runner). |
+| `os` | — | *(Root matrix only.)* Array of OS runners for an **OS matrix** — the group runs once per OS (e.g. `["ubuntu-latest","windows-latest","macos-latest"]`), each cell's `runs-on` being that OS. Empty → use `runner`. Don't combine with a custom `runner`; if both are set, the OS axis wins. |
 | `timeout` | `120` | Job timeout in minutes. |
 | `num_threads` | `1` | `JULIA_NUM_THREADS`. |
 | `local_only` | `false` | When `true`, skip this group if the sublibrary is in the matrix only because an upstream dependency changed (not its own files). For groups too expensive to run on every transitive rebuild. *(Sublibrary matrix only; not meaningful at the root.)* |
@@ -558,10 +559,14 @@ continue_on_error = true                        # non-fatal group
 [GPU]
 versions = ["1"]
 runner = ["self-hosted", "Linux", "X64", "gpu"]
+
+[Core]
+versions = ["lts", "1"]
+os = ["ubuntu-latest", "windows-latest", "macos-latest"]   # OS matrix: runs once per OS
 ```
 
 `grouped-tests.yml` runs `compute_affected_sublibraries.jl --root-matrix` to
-turn that into the job matrix, then runs each `group × version` cell via
+turn that into the job matrix, then runs each `group × version × os` cell via
 `tests.yml` (`project: '.'`), dispatching the group through `group-env-name`
 (default `GROUP`) — the same env var the package's `runtests.jl` already reads.
 Unlike the per-sublibrary matrix it is **not** diff-filtered: the root package

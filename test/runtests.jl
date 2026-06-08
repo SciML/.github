@@ -213,6 +213,37 @@ end
     @test gpu.timeout == 200 && gpu.num_threads == 4
 end
 
+@testset "root matrix: OS axis (group × version × os)" begin
+    d = mktempdir()
+    mkpath(joinpath(d, "test"))
+    write(
+        joinpath(d, "test", "test_groups.toml"), """
+        [Core]
+        versions = ["lts", "1"]
+        os = ["ubuntu-latest", "windows-latest", "macos-latest"]
+
+        [QA]
+        versions = ["1"]
+
+        [GPU]
+        versions = ["1"]
+        runner = ["self-hosted", "Linux", "X64", "gpu"]
+        """
+    )
+    m = build_root_matrix(d)
+    # Core: 2 versions × 3 OSes = 6 cells; each cell's runner is the OS string.
+    core = filter(e -> e.group == "Core", m)
+    @test length(core) == 6
+    @test Set((e.version, e.runner) for e in core) ==
+          Set((v, o) for v in ["lts", "1"] for o in ["ubuntu-latest", "windows-latest", "macos-latest"])
+    # QA: no os -> single default ubuntu runner.
+    qa = filter(e -> e.group == "QA", m)
+    @test length(qa) == 1 && only(qa).runner == "ubuntu-latest"
+    # GPU: custom runner, no OS fan-out.
+    gpu = filter(e -> e.group == "GPU", m)
+    @test length(gpu) == 1 && only(gpu).runner == ["self-hosted", "Linux", "X64", "gpu"]
+end
+
 @testset "root matrix faithfully reproduces OrdinaryDiffEq's embedded matrix" begin
     # ODE's root CI.yml is 17 groups × [lts,1,pre] minus excludes (AD->lts only,
     # QA->lts/1, ODEInterfaceRegression->lts only). Per-group `versions`

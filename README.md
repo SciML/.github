@@ -33,6 +33,7 @@ Two things live here:
   - [Monorepo structure](#monorepo-structure) — full layout spec in [Monorepo.md](Monorepo.md)
   - [How sublibrary tests run](#how-sublibrary-tests-run)
   - [`test_groups.toml`](#test_groupstoml)
+  - [`grouped-tests.yml` (root matrix)](#grouped-testsyml--declare-the-root-test-matrix-in-test_groupstoml)
   - [Dependency-graph change detection](#dependency-graph-change-detection)
   - [`sublibrary-project-tests.yml`](#sublibrary-project-testsyml)
   - [`sublibrary-downgrade.yml`](#sublibrary-downgradeyml)
@@ -458,8 +459,15 @@ come from each sublib's `test_groups.toml` (below).
 
 ### `test_groups.toml`
 
-Either model expands each affected sublibrary into a matrix defined by an
-optional `lib/<name>/test/test_groups.toml`:
+The same file format declares test groups in **two** places:
+
+- **`lib/<name>/test/test_groups.toml`** — a sublibrary's groups, expanded by
+  the (diff-filtered) sublibrary CI below.
+- **`test/test_groups.toml`** (repo root) — the **root** package's own groups,
+  expanded by [`grouped-tests.yml`](#grouped-testsyml) so the root `CI.yml` is a
+  thin caller instead of a hand-maintained matrix. Works for non-monorepos too.
+
+A sublibrary file looks like:
 
 ```toml
 [Core]
@@ -482,10 +490,13 @@ Per-group fields:
 | `runner` | `"ubuntu-latest"` | `runs-on` string or label array (e.g. a GPU self-hosted runner). |
 | `timeout` | `120` | Job timeout in minutes. |
 | `num_threads` | `1` | `JULIA_NUM_THREADS`. |
-| `local_only` | `false` | When `true`, skip this group if the sublibrary is in the matrix only because an upstream dependency changed (not its own files). For groups too expensive to run on every transitive rebuild. |
+| `local_only` | `false` | When `true`, skip this group if the sublibrary is in the matrix only because an upstream dependency changed (not its own files). For groups too expensive to run on every transitive rebuild. *(Sublibrary matrix only; not meaningful at the root.)* |
+| `continue_on_error` | `false` | When `true`, a failing job in this group doesn't fail the run (maps to `tests.yml`'s `continue-on-error`). Used for non-fatal root groups such as OrdinaryDiffEq's `Downstream`. |
 
-**Default when there's no `test_groups.toml`:** `Core` on `["lts","1","pre"]`
-+ `QA` on `["lts","1"]`. (See [Monorepo.md](Monorepo.md#5-test_groupstoml) for the
+**Default when there's no `test_groups.toml`:** for a sublibrary, `Core` on
+`["lts","1","pre"]` + `QA` on `["lts","1"]`; for the **root** matrix
+(`grouped-tests.yml`), a single `Core` group (the whole suite) on
+`["lts","1","pre"]`. (See [Monorepo.md](Monorepo.md#5-test_groupstoml) for the
 version-set rollout.)
 
 The group name reaches the sublibrary's `runtests.jl` through an env var. In the
@@ -501,6 +512,79 @@ if GROUP == "All" || GROUP == "QA"
     # Aqua / JET / allocation tests
 end
 ```
+
+### `grouped-tests.yml` — declare the root test matrix in `test_groups.toml`
+
+A package's **root** test groups can be declared once in a root
+`test/test_groups.toml` and run via `grouped-tests.yml`, instead of
+hand-maintaining a `group × version` matrix in each repo's `CI.yml`. The root
+`CI.yml` becomes a thin caller:
+
+```yaml
+# .github/workflows/CI.yml
+name: CI
+on:
+  pull_request:
+    branches: [master]
+    paths-ignore: ['docs/**']
+  push:
+    branches: [master]
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
+jobs:
+  tests:
+    uses: "SciML/.github/.github/workflows/grouped-tests.yml@v1"
+    secrets: "inherit"
+```
+
+and `test/test_groups.toml` carries the matrix (per-group `versions` express
+what would otherwise be a base matrix plus `exclude:`/`include:` rows):
+
+```toml
+[InterfaceI]
+versions = ["lts", "1", "pre"]
+
+[AD]
+versions = ["lts"]                              # this group only on lts
+
+[QA]
+versions = ["lts", "1"]
+
+[Downstream]
+versions = ["lts", "1", "pre"]
+continue_on_error = true                        # non-fatal group
+
+[GPU]
+versions = ["1"]
+runner = ["self-hosted", "Linux", "X64", "gpu"]
+```
+
+`grouped-tests.yml` runs `compute_affected_sublibraries.jl --root-matrix` to
+turn that into the job matrix, then runs each `group × version` cell via
+`tests.yml` (`project: '.'`), dispatching the group through `group-env-name`
+(default `GROUP`) — the same env var the package's `runtests.jl` already reads.
+Unlike the per-sublibrary matrix it is **not** diff-filtered: the root package
+runs all of its groups on every push/PR.
+
+**Not monorepo-only.** Any single package can adopt it: with no
+`test/test_groups.toml` the default is a single `Core` group (the whole suite)
+on `["lts","1","pre"]`, so a non-monorepo gets the standard version matrix from
+a near-zero-line `CI.yml`, and can split into groups later.
+
+| Input | Type | Default | Description |
+|---|---|---|---|
+| `group-env-name` | string | `"GROUP"` | Env var the package's `runtests.jl` reads its group from (OrdinaryDiffEq uses `ODEDIFFEQ_TEST_GROUP`). |
+| `check-bounds` | string | `"yes"` | `julia-runtest` `check_bounds` per group. |
+| `allow-reresolve` | boolean | `true` | `julia-runtest` `allow_reresolve`. |
+| `coverage` | boolean | `true` | Collect & upload coverage. |
+| `coverage-directories` | string | `"src,ext"` | Coverage dirs. |
+| `apt-packages` | string | `""` | System packages to install (Linux). |
+| `dotgithub-ref` | string | `"v1"` | Ref of `SciML/.github` to source the matrix script from. |
+
+> A monorepo therefore has **two** test workflows: `grouped-tests.yml` for the
+> root package's own groups, and `sublibrary-project-tests.yml` for the
+> (incremental) `lib/<name>` sublibraries.
 
 ### Dependency-graph change detection
 
@@ -521,6 +605,7 @@ The script's output modes:
 |---|---|---|
 | `… <repo> --projects-matrix` | `[{project, group, version, runner, timeout, num_threads}, …]` | `sublibrary-project-tests.yml` |
 | `… <repo> --projects` | `["lib/A", "lib/B", …]` | simple path listing |
+| `… <repo> --root-matrix` | `[{group, version, runner, timeout, num_threads, continue_on_error}, …]` from the **root** `test/test_groups.toml` (no diff filter, no `lib/` required) | `grouped-tests.yml` |
 
 ### `sublibrary-project-tests.yml`
 

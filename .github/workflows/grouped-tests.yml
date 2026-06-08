@@ -1,0 +1,112 @@
+name: "Reusable Grouped Tests Workflow (test_groups.toml)"
+
+# Runs a package's OWN test groups, declared once in test/test_groups.toml, via
+# the reusable tests.yml workflow (project: '.'). Each group runs on every Julia
+# version it lists, carrying its per-group runner / timeout / num_threads /
+# continue_on_error, dispatched through a group env var (default GROUP) that the
+# package's runtests.jl reads. This replaces a hand-maintained group × version
+# matrix embedded in the caller's CI.yml: the matrix lives in test_groups.toml
+# and CI.yml becomes a thin caller. The matrix is computed by
+# scripts/compute_affected_sublibraries.jl --root-matrix.
+#
+# Works for monorepo ROOTS and ordinary single packages alike (no lib/ needed).
+# When the repo has no test/test_groups.toml, the default is a single "Core"
+# group (the whole suite) on ["lts", "1", "pre"]. The root matrix is NOT
+# diff-filtered -- every group runs on every push/PR (unlike the per-sublibrary
+# sublibrary-project-tests.yml, which is incremental).
+#
+# Caller (per repo) supplies its branch triggers + concurrency:
+#
+#   jobs:
+#     tests:
+#       uses: SciML/.github/.github/workflows/grouped-tests.yml@v1
+#       # with:                                  # OrdinaryDiffEq, e.g.
+#       #   group-env-name: ODEDIFFEQ_TEST_GROUP
+#       #   check-bounds: auto
+#       secrets: inherit
+
+on:
+  workflow_call:
+    inputs:
+      group-env-name:
+        description: "Environment variable name the package's runtests.jl reads its group from (default GROUP)"
+        default: "GROUP"
+        required: false
+        type: string
+      check-bounds:
+        description: "Value of julia-runtest's check_bounds (yes/no/auto) for each group"
+        default: "yes"
+        required: false
+        type: string
+      allow-reresolve:
+        description: "Value of julia-runtest's allow_reresolve for each group"
+        default: true
+        required: false
+        type: boolean
+      coverage:
+        description: "Collect and upload code coverage"
+        default: true
+        required: false
+        type: boolean
+      coverage-directories:
+        description: "Comma-separated directories the processcoverage step scans"
+        default: "src,ext"
+        required: false
+        type: string
+      apt-packages:
+        description: "Space-separated apt packages to install before building/testing (e.g. for R / Python / FEniCS wrappers). Linux runners only."
+        default: ""
+        required: false
+        type: string
+      dotgithub-ref:
+        description: "Ref of SciML/.github to source the matrix-computation script from"
+        default: "v1"
+        required: false
+        type: string
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.compute.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: "Checkout SciML/.github for the matrix script"
+        uses: actions/checkout@v6
+        with:
+          repository: SciML/.github
+          ref: "${{ inputs.dotgithub-ref }}"
+          path: .sciml-dotgithub
+      - uses: julia-actions/setup-julia@v3
+        with:
+          version: "1"
+      - name: "Compute root test-group matrix from test/test_groups.toml"
+        id: compute
+        run: |
+          MATRIX=$(julia .sciml-dotgithub/scripts/compute_affected_sublibraries.jl . --root-matrix)
+          echo "Matrix: $MATRIX"
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+
+  test:
+    needs: detect
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.detect.outputs.matrix) }}
+    name: "${{ matrix.group }} (julia ${{ matrix.version }})"
+    uses: "SciML/.github/.github/workflows/tests.yml@v1"
+    with:
+      project: "."
+      group: "${{ matrix.group }}"
+      group-env-name: "${{ inputs.group-env-name }}"
+      julia-version: "${{ matrix.version }}"
+      runner: ${{ toJson(matrix.runner) }}
+      timeout-minutes: ${{ matrix.timeout }}
+      num-threads: "${{ matrix.num_threads }}"
+      continue-on-error: ${{ matrix.continue_on_error }}
+      check-bounds: "${{ inputs.check-bounds }}"
+      allow-reresolve: ${{ inputs.allow-reresolve }}
+      coverage: ${{ inputs.coverage }}
+      coverage-directories: "${{ inputs.coverage-directories }}"
+      apt-packages: "${{ inputs.apt-packages }}"
+    secrets: "inherit"

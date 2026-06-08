@@ -11,10 +11,10 @@
 # Each sublibrary can optionally define test groups in test/test_groups.toml:
 #
 #   [Core]
-#   versions = ["lts", "1.11", "1", "pre"]
+#   versions = ["lts", "1", "pre"]
 #
 #   [QA]
-#   versions = ["1"]
+#   versions = ["lts", "1"]
 #
 #   [GPU]
 #   versions = ["1"]
@@ -34,8 +34,8 @@
 #                 runs whenever any file under lib/<this-pkg>/ is edited.
 #
 # If no test/test_groups.toml exists, the default is:
-#   Core on ["lts", "1.11", "1", "pre"]
-#   QA on ["1"]
+#   Core on ["lts", "1", "pre"]
+#   QA on ["lts", "1"]
 #
 # A group that needs test-only deps beyond the sublibrary's [targets].test list should
 # carry an isolated environment at test/<group>/Project.toml that runtests.jl activates
@@ -61,8 +61,8 @@
 using TOML
 
 const DEFAULT_TEST_GROUPS = Dict(
-    "Core" => ["lts", "1.11", "1", "pre"],
-    "QA" => ["1"],
+    "Core" => ["lts", "1", "pre"],
+    "QA" => ["lts", "1"],
 )
 
 function build_dependency_graph(lib_dir::String)

@@ -57,6 +57,16 @@
 # sublibraries), for the project-model sublibrary CI which tests each via
 # `tests.yml` project=lib/<pkg> rather than GROUP dispatch. test_groups.toml
 # (versions/runner/timeout/threads/local_only) does not apply in that mode.
+#
+# With the --root-matrix flag the output is the ROOT package's group matrix,
+# read from <repo>/test/test_groups.toml (NOT under lib/), as a JSON array of
+# {group, version, runner, timeout, num_threads, continue_on_error}. This is not
+# diff-filtered (the root package runs all its groups every push/PR) and needs
+# no lib/ directory, so ordinary single packages can use it too. When no
+# test/test_groups.toml exists the default is a single "Core" group on
+# ["lts", "1", "pre"]. Consumed by the reusable grouped-tests.yml so a repo's
+# root CI.yml is a thin caller instead of a hand-maintained matrix. Usage:
+#   julia compute_affected_sublibraries.jl /path/to/repo --root-matrix
 
 using TOML
 
@@ -133,26 +143,50 @@ struct TestGroupConfig
     timeout::Int
     num_threads::Int
     local_only::Bool
+    continue_on_error::Bool
+end
+
+function parse_test_group(config::AbstractDict)
+    versions = convert(Vector{String}, config["versions"])
+    runner_raw = get(config, "runner", "ubuntu-latest")
+    runner = runner_raw isa Vector ? convert(Vector{String}, runner_raw) : runner_raw::String
+    timeout = Int(get(config, "timeout", 120))
+    num_threads = Int(get(config, "num_threads", 1))
+    local_only = Bool(get(config, "local_only", false))
+    continue_on_error = Bool(get(config, "continue_on_error", false))
+    return TestGroupConfig(versions, runner, timeout, num_threads, local_only, continue_on_error)
 end
 
 function load_test_groups(lib_dir::String, pkg::String)
     groups_file = joinpath(lib_dir, pkg, "test", "test_groups.toml")
     if isfile(groups_file)
         toml = TOML.parsefile(groups_file)
-        groups = Dict{String, TestGroupConfig}()
-        for (name, config) in toml
-            versions = convert(Vector{String}, config["versions"])
-            runner_raw = get(config, "runner", "ubuntu-latest")
-            runner = runner_raw isa Vector ? convert(Vector{String}, runner_raw) : runner_raw::String
-            timeout = Int(get(config, "timeout", 120))
-            num_threads = Int(get(config, "num_threads", 1))
-            local_only = Bool(get(config, "local_only", false))
-            groups[name] = TestGroupConfig(versions, runner, timeout, num_threads, local_only)
-        end
-        return groups
+        return Dict{String, TestGroupConfig}(name => parse_test_group(config) for (name, config) in toml)
     end
     return Dict{String, TestGroupConfig}(
-        k => TestGroupConfig(v, "ubuntu-latest", 120, 1, false) for (k, v) in DEFAULT_TEST_GROUPS
+        k => TestGroupConfig(v, "ubuntu-latest", 120, 1, false, false) for (k, v) in DEFAULT_TEST_GROUPS
+    )
+end
+
+# The root package's own test groups (test/test_groups.toml at the repo root,
+# NOT under lib/). Unlike the sublibrary matrix this is not diff-filtered: the
+# root package runs all of its groups on every push/PR. Consumed by the
+# reusable grouped-tests.yml so a monorepo root -- or any single package --
+# declares its group x version matrix once in test_groups.toml and keeps CI.yml
+# a thin caller, instead of hand-maintaining the matrix in YAML. When no
+# test/test_groups.toml exists, defaults to a single "Core" group (the whole
+# suite) on the standard version set.
+const DEFAULT_ROOT_GROUPS = Dict("Core" => ["lts", "1", "pre"])
+
+function load_root_test_groups(repo_root::String)
+    groups_file = joinpath(repo_root, "test", "test_groups.toml")
+    if isfile(groups_file)
+        toml = TOML.parsefile(groups_file)
+        groups = Dict{String, TestGroupConfig}(name => parse_test_group(config) for (name, config) in toml)
+        isempty(groups) || return groups
+    end
+    return Dict{String, TestGroupConfig}(
+        k => TestGroupConfig(v, "ubuntu-latest", 120, 1, false, false) for (k, v) in DEFAULT_ROOT_GROUPS
     )
 end
 
@@ -315,6 +349,43 @@ function print_json(entries)
     return println("]")
 end
 
+# Root-package matrix: every group × every version it lists, with no diff
+# filtering (the root package runs all its groups on every push/PR). Carries
+# continue_on_error so a non-fatal group (e.g. OrdinaryDiffEq's Downstream) maps
+# to tests.yml's continue-on-error input.
+function build_root_matrix(repo_root::String)
+    groups = load_root_test_groups(repo_root)
+    entries = []
+    for group_name in sort!(collect(keys(groups)))
+        config = groups[group_name]
+        for ver in config.versions
+            push!(
+                entries,
+                (;
+                    group = group_name, version = ver, runner = config.runner,
+                    timeout = config.timeout, num_threads = config.num_threads,
+                    continue_on_error = config.continue_on_error,
+                )
+            )
+        end
+    end
+    return entries
+end
+
+function print_root_matrix(entries)
+    print("[")
+    for (i, entry) in enumerate(entries)
+        i > 1 && print(",")
+        print("{\"group\":\"", entry.group, "\",\"version\":\"", entry.version, "\",\"runner\":")
+        json_value(entry.runner)
+        print(
+            ",\"timeout\":", entry.timeout, ",\"num_threads\":", entry.num_threads,
+            ",\"continue_on_error\":", entry.continue_on_error ? "true" : "false", "}",
+        )
+    end
+    return println("]")
+end
+
 function main()
     if length(ARGS) < 1
         println(stderr, "Usage: julia $(PROGRAM_FILE) <repo_root>")
@@ -322,6 +393,14 @@ function main()
     end
 
     repo_root = ARGS[1]
+
+    # Root-package group matrix from <repo>/test/test_groups.toml. Independent of
+    # the sublibrary dependency graph, so it works for ordinary single packages
+    # too (no lib/ required) -- handle it before the lib/ check.
+    if "--root-matrix" in ARGS
+        return print_root_matrix(build_root_matrix(repo_root))
+    end
+
     lib_dir = joinpath(repo_root, "lib")
 
     if !isdir(lib_dir)

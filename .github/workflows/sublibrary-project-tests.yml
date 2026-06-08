@@ -12,7 +12,7 @@ name: "Reusable Sublibrary CI (project model)"
 # timeout/num_threads/local_only), exactly like sublibrary-tests.yml -- but run
 # in the project model: tests.yml with project=lib/<name> and the group passed
 # via group-env-name (e.g. ODEDIFFEQ_TEST_GROUP). Sublibraries with no
-# test_groups.toml get the default Core on [lts,1.11,1,pre] + QA on [1].
+# test_groups.toml get the default Core on [lts,1,pre] + QA on [lts,1].
 # tests.yml transitively git-develops the sublibrary's in-repo [sources], so no
 # root runtests.jl GROUP dispatcher is needed.
 #

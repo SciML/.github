@@ -82,10 +82,10 @@ end
     @testset "projects-matrix: default groups + downstream→v1" begin
         direct, trans = compute_affected(["lib/A/src/A.jl"], graph, rev)
         m = build_projects_matrix(direct, trans, lib)
-        # A is directly changed: default Core on lts,1.11,1,pre + QA on 1
+        # A is directly changed: default Core on lts,1,pre + QA on lts,1
         a = filter(e -> e.project == "lib/A", m)
         @test Set((e.group, e.version) for e in a) ==
-              Set([("Core", "lts"), ("Core", "1.11"), ("Core", "1"), ("Core", "pre"), ("QA", "1")])
+              Set([("Core", "lts"), ("Core", "1"), ("Core", "pre"), ("QA", "lts"), ("QA", "1")])
         # B and C are downstream: version "1" only
         for p in ("lib/B", "lib/C")
             ds = filter(e -> e.project == p, m)
@@ -169,4 +169,84 @@ end
     # empty input -> []
     out2 = read(pipeline(IOBuffer("README.md\n"), `$(Base.julia_cmd()) $SCRIPT $root --projects-matrix`), String)
     @test strip(out2) == "[]"
+end
+
+@testset "root matrix: build_root_matrix (defaults, per-group fields, continue_on_error)" begin
+    d = mktempdir()
+    # No test/test_groups.toml -> single Core group on the standard set.
+    @test Set((e.group, e.version) for e in build_root_matrix(d)) ==
+          Set([("Core", "lts"), ("Core", "1"), ("Core", "pre")])
+    @test all(e -> e.continue_on_error == false, build_root_matrix(d))
+
+    mkpath(joinpath(d, "test"))
+    write(
+        joinpath(d, "test", "test_groups.toml"), """
+        [Core]
+        versions = ["lts", "1", "pre"]
+
+        [QA]
+        versions = ["lts", "1"]
+
+        [AD]
+        versions = ["lts"]
+
+        [Downstream]
+        versions = ["lts", "1", "pre"]
+        continue_on_error = true
+
+        [GPU]
+        versions = ["1"]
+        runner = ["self-hosted", "Linux", "X64", "gpu"]
+        timeout = 200
+        num_threads = 4
+        """
+    )
+    m = build_root_matrix(d)
+    cells = Set((e.group, e.version) for e in m)
+    @test ("AD", "1") ∉ cells && ("AD", "pre") ∉ cells && ("AD", "lts") in cells
+    @test ("QA", "pre") ∉ cells && ("QA", "lts") in cells && ("QA", "1") in cells
+    # continue_on_error rides only on the Downstream group.
+    @test all(e -> e.continue_on_error, filter(e -> e.group == "Downstream", m))
+    @test all(e -> !e.continue_on_error, filter(e -> e.group != "Downstream", m))
+    gpu = only(filter(e -> e.group == "GPU", m))
+    @test gpu.runner == ["self-hosted", "Linux", "X64", "gpu"]
+    @test gpu.timeout == 200 && gpu.num_threads == 4
+end
+
+@testset "root matrix faithfully reproduces OrdinaryDiffEq's embedded matrix" begin
+    # ODE's root CI.yml is 17 groups × [lts,1,pre] minus excludes (AD->lts only,
+    # QA->lts/1, ODEInterfaceRegression->lts only). Per-group `versions`
+    # expresses the same 46 cells, which is the migration this enables.
+    base = [
+        "InterfaceI", "InterfaceII", "InterfaceIII", "InterfaceIV", "InterfaceV",
+        "Integrators_I", "Integrators_II", "AlgConvergence_I", "AlgConvergence_II",
+        "AlgConvergence_III", "ModelingToolkit", "Downstream", "Regression_I", "Regression_II",
+    ]
+    d = mktempdir()
+    mkpath(joinpath(d, "test"))
+    io = IOBuffer()
+    for g in base
+        println(io, "[$g]\nversions = [\"lts\", \"1\", \"pre\"]\n")
+    end
+    println(io, "[AD]\nversions = [\"lts\"]\n")
+    println(io, "[QA]\nversions = [\"lts\", \"1\"]\n")
+    println(io, "[ODEInterfaceRegression]\nversions = [\"lts\"]\n")
+    write(joinpath(d, "test", "test_groups.toml"), String(take!(io)))
+
+    cells = Set((e.group, e.version) for e in build_root_matrix(d))
+    groups17 = vcat(base, ["AD", "QA", "ODEInterfaceRegression"])
+    expected = Set((g, v) for g in groups17 for v in ["lts", "1", "pre"])
+    for ex in [("AD", "1"), ("AD", "pre"), ("QA", "pre"), ("ODEInterfaceRegression", "1"), ("ODEInterfaceRegression", "pre")]
+        delete!(expected, ex)
+    end
+    @test cells == expected
+    @test length(cells) == 46
+end
+
+@testset "--root-matrix CLI (no lib/ required) + JSON shape" begin
+    d = mktempdir()  # deliberately NO lib/ directory
+    out = read(pipeline(IOBuffer(""), `$(Base.julia_cmd()) $SCRIPT $d --root-matrix`), String)
+    @test occursin("\"group\":\"Core\"", out)
+    @test occursin("\"continue_on_error\":false", out)
+    @test startswith(strip(out), "[") && endswith(strip(out), "]")
 end

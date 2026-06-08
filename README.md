@@ -30,6 +30,7 @@ Two things live here:
     [`docs-preview-cleanup.yml`](#docs-preview-cleanupyml) ·
     [`major-version-tag.yml`](#major-version-tagyml)
 - [Monorepos: sublibrary CI](#monorepos-sublibrary-ci)
+  - [Monorepo structure](#monorepo-structure) — full layout spec in [Monorepo.md](Monorepo.md)
   - [How sublibrary tests run](#how-sublibrary-tests-run)
   - [`test_groups.toml`](#test_groupstoml)
   - [Dependency-graph change detection](#dependency-graph-change-detection)
@@ -424,6 +425,17 @@ A SciML *monorepo* is a package with sub-packages under `lib/<name>/`, each with
 its own `Project.toml` and `test/runtests.jl` (e.g. OrdinaryDiffEq,
 ModelingToolkit, Optimization, NonlinearSolve). Sublibrary CI runs each
 sublibrary's tests, and — crucially — only the ones a change actually affects.
+
+### Monorepo structure
+
+The full canonical layout — umbrella root + `lib/<Name>` packages, the
+`[sources]` dependency graph, the one-group-one-folder test structure with
+dependency-driven per-group `Project.toml`s, group naming and the
+`<REPO>_TEST_GROUP` env var, `test_groups.toml`, the thin `@v1` workflow set, and
+the standard repo files — is specified in **[Monorepo.md](Monorepo.md)**, the
+reference for setting up a new monorepo. The reference implementation is
+[SciML/OrdinaryDiffEq.jl](https://github.com/SciML/OrdinaryDiffEq.jl). The
+remainder of this section is the CI-mechanics summary.
 
 ### How sublibrary tests run
 

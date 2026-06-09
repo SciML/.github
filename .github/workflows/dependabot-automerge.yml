@@ -38,8 +38,8 @@ on:
         required: false
         type: string
       wait-timeout-minutes:
-        description: "Maximum minutes to wait for all checks to complete before holding the PR for a human. CI that legitimately runs longer should raise this."
-        default: 60
+        description: "Maximum minutes to wait for all checks to complete before holding the PR for a human. The job exits as soon as checks finish (it does NOT sleep the full window); this is only the give-up cap for stuck/stalled CI, so it's set generously for heavy suites."
+        default: 720
         required: false
         type: number
 

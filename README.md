@@ -390,7 +390,7 @@ enabled" setting is required.
 | `update-types` | string | `"version-update:semver-patch,version-update:semver-minor"` | Dependabot update types to auto-merge. |
 | `ecosystems` | string | `""` | Comma-separated `package-ecosystem`s to restrict to (e.g. `github-actions`); empty = any. |
 | `merge-method` | string | `"squash"` | `squash`, `merge`, or `rebase`. |
-| `wait-timeout-minutes` | number | `60` | Max minutes to wait for all checks to finish before holding the PR for a human. Raise this if your CI legitimately runs longer. |
+| `wait-timeout-minutes` | number | `720` | Max minutes to wait for all checks to finish before holding the PR for a human. The job exits as soon as checks finish — this is only the give-up cap for stuck CI, so it's generous (12h) for heavy suites. |
 
 ```yaml
 # .github/workflows/DependabotAutoMerge.yml

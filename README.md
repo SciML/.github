@@ -371,16 +371,26 @@ jobs:
 
 ### `dependabot-automerge.yml`
 
-Auto-approves and enables auto-merge on Dependabot PRs matching the configured
-update types / ecosystems. GitHub still requires the PR's status checks to pass
-before merging, so only green PRs fast-track. The repo must have **auto-merge
-enabled** (ideally with required status checks via branch protection).
+Auto-approves Dependabot PRs matching the configured update types / ecosystems,
+then merges **only after every status check on the PR head has completed _and_
+passed** — not just the checks branch protection happens to mark *required*.
+
+This is deliberately stricter than a bare `gh pr merge --auto`. Native
+auto-merge waits only on *required* checks and merges immediately if a repo has
+none configured (or its required set is stale / misconfigured), which can
+fast-track a still-running or red PR. This workflow instead polls **all** checks that
+actually ran on the head commit, so the gate holds regardless of branch
+protection config. If any check fails, no checks are present, or the wait times
+out, the PR is left for a human with an explanatory comment (the job still
+succeeds — holding is a valid outcome, not a failure). No repo-level "auto-merge
+enabled" setting is required.
 
 | Input | Type | Default | Description |
 |---|---|---|---|
 | `update-types` | string | `"version-update:semver-patch,version-update:semver-minor"` | Dependabot update types to auto-merge. |
 | `ecosystems` | string | `""` | Comma-separated `package-ecosystem`s to restrict to (e.g. `github-actions`); empty = any. |
 | `merge-method` | string | `"squash"` | `squash`, `merge`, or `rebase`. |
+| `wait-timeout-minutes` | number | `60` | Max minutes to wait for all checks to finish before holding the PR for a human. Raise this if your CI legitimately runs longer. |
 
 ```yaml
 # .github/workflows/DependabotAutoMerge.yml
@@ -389,6 +399,8 @@ on: pull_request
 permissions:
   contents: write
   pull-requests: write
+  checks: read     # only needed on private repos
+  statuses: read   # only needed on private repos
 jobs:
   automerge:
     uses: "SciML/.github/.github/workflows/dependabot-automerge.yml@v1"

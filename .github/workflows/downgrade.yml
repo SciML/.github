@@ -91,5 +91,10 @@ jobs:
         with:
           project: "${{ inputs.project }}"
           allow_reresolve: false
+          # 'auto' flips to true on Dependabot/CompatHelper PRs, which demands the
+          # latest compatible versions — the exact opposite of a downgraded manifest —
+          # and fails resolution (e.g. "empty intersection between X@min and project
+          # compatibility latest"). Downgrade tests must keep the minimum versions.
+          force_latest_compatible_version: false
         env:
           GROUP: "${{ inputs.group }}"

@@ -1,10 +1,23 @@
 name: "Reusable Dependabot Auto-merge Workflow"
 
-# Auto-approves and enables auto-merge on Dependabot PRs that match the
-# configured update types / ecosystems. GitHub still requires the PR's status
-# checks to pass before the merge happens, so this only fast-tracks green PRs.
-# The caller triggers on pull_request and must grant contents+pull-requests
-# write (and the repo must have auto-merge enabled).
+# Auto-approves Dependabot PRs that match the configured update types /
+# ecosystems, then merges ONLY after EVERY status check on the PR head has
+# completed AND passed.
+#
+# Why not a bare `gh pr merge --auto`: native auto-merge only waits on the
+# checks that branch protection marks *required*, and merges immediately if
+# none are required (or if the required set is stale / mis-named). That lets a
+# red or still-running PR fast-track when a repo's required-status-checks config
+# is missing or out of date. This workflow instead gates on ALL checks that
+# actually ran on the head commit, so the gate holds regardless of branch
+# protection config. If any check fails, no checks are present, or the wait
+# times out, the PR is left for a human with an explanatory comment (the job
+# still succeeds — holding is a valid outcome).
+#
+# The caller triggers on pull_request and must grant contents + pull-requests
+# write. `checks: read` + `statuses: read` are used to inspect CI; reads work
+# without an explicit grant on public repos, but private repos should also
+# grant those two scopes on the caller job.
 
 on:
   workflow_call:
@@ -24,6 +37,11 @@ on:
         default: "squash"
         required: false
         type: string
+      wait-timeout-minutes:
+        description: "Maximum minutes to wait for all checks to complete before holding the PR for a human. The job exits as soon as checks finish (it does NOT sleep the full window); this is only the give-up cap for stuck/stalled CI, so it's set generously for heavy suites."
+        default: 720
+        required: false
+        type: number
 
 jobs:
   automerge:
@@ -32,13 +50,15 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      checks: read
+      statuses: read
     steps:
       - name: "Fetch Dependabot metadata"
         id: meta
         uses: dependabot/fetch-metadata@v2
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-      - name: "Approve and enable auto-merge"
+      - name: "Approve, wait for ALL checks, merge only if all pass"
         if: >-
           contains(inputs.update-types, steps.meta.outputs.update-type) &&
           (inputs.ecosystems == '' || contains(inputs.ecosystems, steps.meta.outputs.package-ecosystem))
@@ -46,6 +66,74 @@ jobs:
           PR_URL: "${{ github.event.pull_request.html_url }}"
           GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
           MERGE_METHOD: "${{ inputs.merge-method }}"
+          REPO: "${{ github.repository }}"
+          RUN_ID: "${{ github.run_id }}"
+          TIMEOUT_MIN: "${{ inputs.wait-timeout-minutes }}"
         run: |
+          set -euo pipefail
           gh pr review --approve "$PR_URL"
-          gh pr merge --auto "--$MERGE_METHOD" "$PR_URL"
+
+          SHA=$(gh pr view "$PR_URL" --json headRefOid --jq .headRefOid)
+          SELF="/runs/${RUN_ID}/"      # exclude THIS workflow run's own check-run(s)
+          GRACE=120                    # min seconds to let checks appear before "no checks" verdict
+          TIMEOUT=$(( TIMEOUT_MIN * 60 ))
+          START=$(date +%s)
+          echo "Gating auto-merge on ALL checks for ${REPO}@${SHA} (timeout ${TIMEOUT_MIN}m)."
+
+          hold() { echo "HELD: $1"; gh pr comment "$PR_URL" --body "$1" || true; exit 0; }
+
+          while true; do
+            ELAPSED=$(( $(date +%s) - START ))
+
+            CR=$(gh api "repos/${REPO}/commits/${SHA}/check-runs?per_page=100" --paginate \
+                  --jq ".check_runs[] | select((.details_url // \"\") | contains(\"${SELF}\") | not) | \"\(.status)=\(.conclusion // \"\")\"" \
+                  2>/dev/null || echo "")
+            ST_COUNT=$(gh api "repos/${REPO}/commits/${SHA}/status" --jq '.total_count' 2>/dev/null || echo 0)
+            ST_STATE=$(gh api "repos/${REPO}/commits/${SHA}/status" --jq '.state' 2>/dev/null || echo "pending")
+
+            TOTAL=0; PENDING=0; FAILED=0
+            if [ -n "$CR" ]; then
+              while IFS= read -r line; do
+                [ -z "$line" ] && continue
+                TOTAL=$((TOTAL+1)); s="${line%%=*}"; c="${line#*=}"
+                if [ "$s" != "completed" ]; then
+                  PENDING=$((PENDING+1))
+                else
+                  case "$c" in
+                    success|skipped|neutral) ;;
+                    *) FAILED=$((FAILED+1)); echo "  not-passing: $line" ;;
+                  esac
+                fi
+              done <<< "$CR"
+            fi
+            if [ "${ST_COUNT:-0}" -gt 0 ]; then
+              TOTAL=$((TOTAL + ST_COUNT))
+              case "$ST_STATE" in
+                pending) PENDING=$((PENDING+1)) ;;
+                failure|error) FAILED=$((FAILED+1)); echo "  not-passing: commit-status=$ST_STATE" ;;
+              esac
+            fi
+            echo "[${ELAPSED}s] checks total=${TOTAL} pending=${PENDING} failed=${FAILED}"
+
+            if [ "$TOTAL" -eq 0 ]; then
+              if [ "$ELAPSED" -lt "$GRACE" ]; then sleep 20; continue; fi
+              hold "🟡 Auto-merge held: no CI checks are present on this PR, so there is nothing to gate on. A maintainer should review and merge manually."
+            fi
+
+            if [ "$PENDING" -eq 0 ]; then
+              if [ "$FAILED" -eq 0 ]; then
+                echo "All ${TOTAL} checks passed — merging."
+                if gh pr merge "--${MERGE_METHOD}" "$PR_URL"; then
+                  exit 0
+                fi
+                hold "🟡 Auto-merge held: all checks passed but the merge was rejected (e.g. branch protection / out-of-date branch). It will retry on the next update, or a maintainer can merge."
+              else
+                hold "🔴 Auto-merge held: ${FAILED} check(s) did not pass. This Dependabot PR will not be auto-merged while any check is failing — fix or re-run CI."
+              fi
+            fi
+
+            if [ "$ELAPSED" -ge "$TIMEOUT" ]; then
+              hold "🟡 Auto-merge held: timed out after ${TIMEOUT_MIN}m waiting for ${PENDING} check(s) to finish. A maintainer can merge once CI completes, or re-run this workflow."
+            fi
+            sleep 30
+          done

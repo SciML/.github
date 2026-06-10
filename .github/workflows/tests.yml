@@ -96,6 +96,11 @@ on:
         default: ""
         required: false
         type: string
+      container:
+        description: "Docker container image to run the job in, e.g. for Python-stack packages (empty string = no container)"
+        default: ""
+        required: false
+        type: string
       force-latest-compatible-version:
         description: "Value of julia-runtest's force_latest_compatible_version"
         default: false
@@ -107,6 +112,7 @@ jobs:
     name: "Tests${{ inputs.group != '' && format(' - {0}', inputs.group) || '' }}"
     continue-on-error: ${{ inputs.continue-on-error || inputs.julia-version == 'nightly' }}
     runs-on: ${{ inputs.runner != '' && fromJson(inputs.runner) || (inputs.self-hosted && 'self-hosted' || inputs.os) }}
+    container: ${{ inputs.container }}
     timeout-minutes: ${{ inputs.timeout-minutes }}
     steps:
       - uses: actions/checkout@v6

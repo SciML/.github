@@ -150,6 +150,7 @@ tested via `project: lib/X` without a hand-written develop step.
 | `self-hosted` | boolean | `false` | Run on a self-hosted runner. |
 | `os` | string | `"ubuntu-latest"` | Runner OS (ignored when self-hosted). |
 | `runner` | string | `""` | JSON-encoded `runs-on` (string or label array, e.g. `'["self-hosted","Linux","X64","gpu"]'`). When non-empty, overrides `self-hosted`/`os`. |
+| `container` | string | `""` | Docker container image to run the job in (e.g. `cmhyett/julia-fenics:latest` for Python-stack packages). Empty = no container. |
 | `timeout-minutes` | number | `360` | Job timeout. |
 | `cache` | boolean | `true` | Use `julia-actions/cache`. |
 | `buildpkg` | boolean | `true` | Run `julia-actions/julia-buildpkg`. |
@@ -597,6 +598,7 @@ a near-zero-line `CI.yml`, and can split into groups later.
 | `coverage` | boolean | `true` | Collect & upload coverage. |
 | `coverage-directories` | string | `"src,ext"` | Coverage dirs. |
 | `apt-packages` | string | `""` | System packages to install (Linux). |
+| `container` | string | `""` | Docker container image each test job runs in (e.g. `cmhyett/julia-fenics:latest`). Empty = no container. |
 | `dotgithub-ref` | string | `"v1"` | Ref of `SciML/.github` to source the matrix script from. |
 
 > A monorepo therefore has **two** test workflows: `grouped-tests.yml` for the

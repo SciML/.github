@@ -59,6 +59,11 @@ on:
         default: ""
         required: false
         type: string
+      container:
+        description: "Docker container image to run each test job in, e.g. for Python-stack packages (empty string = no container)"
+        default: ""
+        required: false
+        type: string
       dotgithub-ref:
         description: "Ref of SciML/.github to source the matrix-computation script from"
         default: "v1"
@@ -110,4 +115,5 @@ jobs:
       coverage: ${{ inputs.coverage }}
       coverage-directories: "${{ inputs.coverage-directories }}"
       apt-packages: "${{ inputs.apt-packages }}"
+      container: "${{ inputs.container }}"
     secrets: "inherit"

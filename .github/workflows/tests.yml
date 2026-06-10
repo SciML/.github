@@ -191,14 +191,35 @@ jobs:
           # avoid oversubscribing (an explicit integer is always honored).
           JULIA_NUM_THREADS: "${{ (inputs.self-hosted && inputs.num-threads == 'auto') && '2' || inputs.num-threads }}"
 
-      - uses: julia-actions/julia-processcoverage@v1
+      - name: "Filter coverage directories to those that exist"
+        # julia-processcoverage hard-errors on directories that don't exist
+        # (e.g. lib/<name>/ext for sublibraries without extensions), so drop
+        # the missing entries here and skip coverage entirely if none remain.
+        id: coverage-dirs
         if: "${{ inputs.coverage }}"
+        shell: bash
+        env:
+          COVERAGE_DIRECTORIES: "${{ inputs.coverage-directories }}"
+        run: |
+          existing=""
+          IFS=',' read -ra requested <<< "$COVERAGE_DIRECTORIES"
+          for dir in "${requested[@]}"; do
+            if [ -d "$dir" ]; then
+              existing="${existing:+$existing,}$dir"
+            else
+              echo "Skipping missing coverage directory: $dir"
+            fi
+          done
+          echo "directories=$existing" >> "$GITHUB_OUTPUT"
+
+      - uses: julia-actions/julia-processcoverage@v1
+        if: "${{ inputs.coverage && steps.coverage-dirs.outputs.directories != '' }}"
         with:
-          directories: "${{ inputs.coverage-directories }}"
+          directories: "${{ steps.coverage-dirs.outputs.directories }}"
 
       - name: "Report Coverage with Codecov"
         uses: codecov/codecov-action@v7
-        if: "${{ inputs.coverage }}"
+        if: "${{ inputs.coverage && steps.coverage-dirs.outputs.directories != '' }}"
         with:
           files: lcov.info
           token: "${{ secrets.CODECOV_TOKEN }}"

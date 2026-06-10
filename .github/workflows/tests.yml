@@ -173,7 +173,10 @@ jobs:
         # Set the group under a configurable env var name so sublibraries that
         # read e.g. ODEDIFFEQ_TEST_GROUP work the same as the default GROUP. The
         # name must be dynamic, which the env: map can't express, so write it to
-        # $GITHUB_ENV here.
+        # $GITHUB_ENV here. shell: bash is required: the default shell on
+        # Windows is pwsh, where "$GITHUB_ENV" does not expand, so the env var
+        # is silently never set and Windows jobs run the default group instead.
+        shell: bash
         run: echo "${{ inputs.group-env-name }}=${{ inputs.group }}" >> "$GITHUB_ENV"
 
       - name: "Run tests ${{ inputs.self-hosted && '' || format('on {0}', inputs.os) }} with Julia v${{ inputs.julia-version }}"

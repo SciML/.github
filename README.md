@@ -230,6 +230,8 @@ to catch under-specified `[compat]` lower bounds.
 | `projects` | string | `"."` | Comma-separated project dirs to downgrade. |
 | `project` | string | `"@."` | `--project` for build/test (a workspace submodule or `lib/X`); default tests the repo root. |
 | `self-hosted` / `os` | | `false` / `ubuntu-latest` | Runner selection. |
+| `apt-packages` | string | `""` | Space-separated apt packages to install before building/testing (Linux only). |
+| `container` | string | `""` | Docker container image to run the job in (e.g. `cmhyett/julia-fenics:latest` for Python-stack packages). Empty = no container. |
 
 ```yaml
 jobs:
@@ -674,6 +676,8 @@ Downgrade-compat tests for each `lib/*` sublibrary.
 | `exclude` | string | `""` | Space-separated sublibrary names to exclude from auto-discovery. |
 | `group-env-name` | string | `""` | Optional group env var name (e.g. `ODEDIFFEQ_TEST_GROUP`). |
 | `group-env-value` | string | `""` | Value for `group-env-name`. |
+| `apt-packages` | string | `""` | Space-separated apt packages to install before building/testing (Linux only). |
+| `container` | string | `""` | Docker container image to run the job in (e.g. `cmhyett/julia-fenics:latest` for Python-stack packages). Empty = no container. |
 
 ```yaml
 jobs:

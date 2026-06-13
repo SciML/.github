@@ -43,11 +43,22 @@ on:
         default: "ubuntu-latest"
         required: false
         type: string
+      apt-packages:
+        description: "Space-separated apt packages to install before building/testing (Linux only)."
+        default: ""
+        required: false
+        type: string
+      container:
+        description: "Docker container image to run the job in, e.g. for Python-stack packages (empty string = no container)"
+        default: ""
+        required: false
+        type: string
 
 jobs:
   downgrade:
     name: "Downgrade Tests${{ inputs.group != '' && format(' - {0}', inputs.group) || '' }}"
     runs-on: "${{ inputs.self-hosted && 'self-hosted' || inputs.os }}"
+    container: ${{ inputs.container }}
     steps:
       - uses: actions/checkout@v6
 
@@ -107,6 +118,12 @@ jobs:
           skip: "${{ env.EFFECTIVE_SKIP }}"
           projects: "${{ inputs.projects }}"
           mode: "${{ inputs.mode != '' && inputs.mode || 'deps' }}"
+
+      - name: "Install system packages"
+        if: "${{ inputs.apt-packages != '' && runner.os == 'Linux' }}"
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ inputs.apt-packages }}
 
       - uses: julia-actions/julia-buildpkg@v1
         with:

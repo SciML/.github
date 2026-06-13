@@ -37,6 +37,16 @@ on:
         default: ""
         required: false
         type: string
+      apt-packages:
+        description: "Space-separated apt packages to install before building/testing (Linux only)."
+        default: ""
+        required: false
+        type: string
+      container:
+        description: "Docker container image to run the job in, e.g. for Python-stack packages (empty string = no container)"
+        default: ""
+        required: false
+        type: string
 
 jobs:
   discover:
@@ -81,6 +91,7 @@ jobs:
     needs: discover
     if: needs.discover.outputs.has_any == 'true'
     runs-on: ubuntu-latest
+    container: ${{ inputs.container }}
     strategy:
       fail-fast: false
       matrix:
@@ -156,6 +167,11 @@ jobs:
           projects: ${{ matrix.project }}
           skip: ${{ env.EFFECTIVE_SKIP }}
           julia_version: ${{ env.JULIA_MM }}
+      - name: "Install system packages"
+        if: "${{ inputs.apt-packages != '' && runner.os == 'Linux' }}"
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ inputs.apt-packages }}
       - uses: julia-actions/julia-buildpkg@v1
         with:
           project: ${{ matrix.project }}

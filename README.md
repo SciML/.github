@@ -226,7 +226,7 @@ to catch under-specified `[compat]` lower bounds.
 |---|---|---|---|
 | `julia-version` | string | `"lts"` | Julia version: the LTS alias (currently 1.10), tracking the LTS as it advances (the minimum-supported floor; see note). |
 | `group` | string | `""` | Test group. |
-| `skip` | string | `""` | **Additional** deps to skip when downgrading, beyond the auto-included Julia stdlibs (see note). |
+| `skip` | string | `""` | **Additional** deps to skip when downgrading, beyond the auto-included Julia stdlibs and any `[sources]` path/url deps (see note). |
 | `projects` | string | `"."` | Comma-separated project dirs to downgrade. |
 | `project` | string | `"@."` | `--project` for build/test (a workspace submodule or `lib/X`); default tests the repo root. |
 | `self-hosted` / `os` | | `false` / `ubuntu-latest` | Runner selection. |
@@ -240,10 +240,12 @@ jobs:
 
 > Downgrade is **strict**: the reusable workflow hardcodes `allow_reresolve:
 > false` and exposes **no `allow-reresolve` input**. The `skip` list is
-> **auto-populated** with all Julia stdlibs, so callers no longer hand-list
-> `Pkg,TOML,Statistics,…` — pass `skip` only for genuinely-extra deps. The
-> caller-facing `julia-version` default is **`"lts"`**, the LTS alias (currently
-> 1.10), tracking the LTS as it advances.
+> **auto-populated** with all Julia stdlibs **and every dep declared in a
+> project's `[sources]` table** (path/url deps are satisfied in-tree, not from
+> the registry, so they must never be downgrade-pinned), so callers no longer
+> hand-list `Pkg,TOML,Statistics,…` or their path deps — pass `skip` only for
+> genuinely-extra deps. The caller-facing `julia-version` default is **`"lts"`**,
+> the LTS alias (currently 1.10), tracking the LTS as it advances.
 > (Auto-skip and the `lts` default land via
 > [SciML/.github #73](https://github.com/SciML/.github/pull/73); strict
 > `allow_reresolve: false` is already in effect.)
@@ -667,7 +669,7 @@ Downgrade-compat tests for each `lib/*` sublibrary.
 | Input | Type | Default | Description |
 |---|---|---|---|
 | `julia-version` | string | `"lts"` | Julia version: the LTS alias (currently 1.10), tracking the LTS as it advances (the minimum-supported floor; see note). |
-| `skip` | string | `""` | **Additional** deps to skip when downgrading, beyond the auto-included Julia stdlibs and in-repo `lib/*` sublibrary names (see note). |
+| `skip` | string | `""` | **Additional** deps to skip when downgrading, beyond the auto-included Julia stdlibs, in-repo `lib/*` sublibrary names, and the sublibrary's own `[sources]` path/url deps (see note). |
 | `projects` | string | `""` | Explicit space-separated `lib/*` paths; empty = auto-discover all. |
 | `exclude` | string | `""` | Space-separated sublibrary names to exclude from auto-discovery. |
 | `group-env-name` | string | `""` | Optional group env var name (e.g. `ODEDIFFEQ_TEST_GROUP`). |
@@ -682,11 +684,13 @@ jobs:
 
 > Downgrade is **strict**: the reusable workflow hardcodes `allow_reresolve:
 > false` and exposes **no `allow-reresolve` input**. The `skip` list is
-> **auto-populated** with all Julia stdlibs plus the in-repo `lib/*` sublibrary
-> names (path-`[sources]` packages must not be downgrade-pinned), so callers no
-> longer hand-list them — pass `skip` only for genuinely-extra deps. The
-> caller-facing `julia-version` default is **`"lts"`**, the LTS alias (currently
-> 1.10), tracking the LTS as it advances.
+> **auto-populated** with all Julia stdlibs, the in-repo `lib/*` sublibrary
+> names, **and every dep declared in the downgraded sublibrary's `[sources]`
+> table** (path/url packages are satisfied in-tree, not from the registry, so
+> they must never be downgrade-pinned), so callers no longer hand-list them —
+> pass `skip` only for genuinely-extra deps. The caller-facing `julia-version`
+> default is **`"lts"`**, the LTS alias (currently 1.10), tracking the LTS as it
+> advances.
 > (Auto-skip and the `lts` default land via
 > [SciML/.github #73](https://github.com/SciML/.github/pull/73); strict
 > `allow_reresolve: false` is already in effect.)

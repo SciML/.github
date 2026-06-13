@@ -125,6 +125,27 @@ jobs:
           echo "In-repo sublibraries: $sublibs"
           effective="$STDLIB_SKIP"
           [ -n "$sublibs" ] && effective="$effective,$sublibs"
+          # The sublibrary being downgraded (matrix.project) may itself declare a
+          # `[sources]` table pointing at path/url deps (e.g. a sibling lib). Such
+          # deps are satisfied in-tree by a checkout, not the registry, so
+          # julia-downgrade-compat rewriting their `[compat]` to `=<floor>` yields
+          # "Unsatisfiable requirements ... no versions left". The lib/* basename
+          # skip above only covers deps whose source name matches a lib dir name;
+          # parse the actual `[sources]` keys to also catch url/aliased sources.
+          src_f="${{ matrix.project }}/Project.toml"
+          if [ -f "$src_f" ]; then
+              src_names="$(julia --startup-file=no -e '
+                using TOML
+                src = get(TOML.parsefile(ARGS[1]), "sources", Dict())
+                println(join(collect(keys(src)), ","))
+              ' "$src_f")"
+              if [ -n "$src_names" ]; then
+                  echo "[sources] deps in ${{ matrix.project }}: $src_names"
+                  effective="$effective,$src_names"
+              fi
+          else
+              echo "No Project.toml at $src_f, skipping [sources] scan"
+          fi
           [ -n "${{ inputs.skip }}" ] && effective="$effective,${{ inputs.skip }}"
           echo "Effective downgrade skip: $effective"
           echo "EFFECTIVE_SKIP=$effective" >> "$GITHUB_ENV"

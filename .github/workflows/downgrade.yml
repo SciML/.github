@@ -73,6 +73,31 @@ jobs:
           ')"
           echo "Julia stdlibs: $stdlibs"
           effective="$stdlibs"
+          # Any dep declared in a project's `[sources]` table is satisfied
+          # in-tree by a path/url checkout (not the registry), so its version is
+          # whatever that checkout is. julia-downgrade-compat would rewrite its
+          # `[compat]` to `=<floor>`, which the in-tree version can't satisfy ->
+          # "Unsatisfiable requirements ... no versions left". Skip every
+          # `[sources]` dep name across all `projects` dirs.
+          IFS=',' read -ra _dirs <<< "${{ inputs.projects }}"
+          for dir in "${_dirs[@]}"; do
+              dir="$(echo "$dir" | xargs)"   # trim surrounding whitespace
+              [ -n "$dir" ] || continue
+              f="$dir/Project.toml"
+              if [ ! -f "$f" ]; then
+                  echo "No Project.toml in '$dir', skipping [sources] scan"
+                  continue
+              fi
+              names="$(julia --startup-file=no -e '
+                using TOML
+                src = get(TOML.parsefile(ARGS[1]), "sources", Dict())
+                println(join(collect(keys(src)), ","))
+              ' "$f")"
+              if [ -n "$names" ]; then
+                  echo "[sources] deps in $dir: $names"
+                  effective="$effective,$names"
+              fi
+          done
           [ -n "${{ inputs.skip }}" ] && effective="$effective,${{ inputs.skip }}"
           echo "Effective downgrade skip: $effective"
           echo "EFFECTIVE_SKIP=$effective" >> "$GITHUB_ENV"

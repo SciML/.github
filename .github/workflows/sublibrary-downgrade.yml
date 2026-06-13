@@ -90,6 +90,8 @@ jobs:
       - uses: julia-actions/setup-julia@v3
         with:
           version: ${{ inputs.julia-version }}
+      - name: "Resolve numeric Julia version for downgrade-compat"
+        run: echo "JULIA_MM=$(julia --startup-file=no -e 'print(VERSION.major, ".", VERSION.minor)')" >> "$GITHUB_ENV"
       - name: "Set sublibrary test group"
         if: "${{ inputs.group-env-name != '' }}"
         run: echo "${{ inputs.group-env-name }}=${{ inputs.group-env-value }}" >> "$GITHUB_ENV"
@@ -153,7 +155,7 @@ jobs:
         with:
           projects: ${{ matrix.project }}
           skip: ${{ env.EFFECTIVE_SKIP }}
-          julia_version: ${{ inputs.julia-version }}
+          julia_version: ${{ env.JULIA_MM }}
       - uses: julia-actions/julia-buildpkg@v1
         with:
           project: ${{ matrix.project }}

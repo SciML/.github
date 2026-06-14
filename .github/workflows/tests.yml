@@ -39,7 +39,7 @@ on:
         type: string
       cache:
         description: "Use the julia-actions/cache action for caching"
-        default: true
+        default: false
         required: false
         type: boolean
       buildpkg:
@@ -124,7 +124,11 @@ jobs:
           arch: "${{ inputs.julia-arch || runner.arch }}"
 
       - uses: julia-actions/cache@v3
-        if: "${{ inputs.cache }}"
+        # Skip caching on self-hosted runners: demeter has a persistent, already
+        # warm depot (20-29GB), so the cache always MISSES and the post-job save
+        # tar-uploads 20-29GB at ~7MB/s (+30-62 min/job). Only useful on
+        # GitHub-hosted/ephemeral runners (empty `runner` and not `self-hosted`).
+        if: "${{ inputs.cache && inputs.runner == '' && !inputs.self-hosted }}"
         with:
           token: "${{ secrets.GITHUB_TOKEN }}"
 

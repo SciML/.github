@@ -69,6 +69,11 @@ on:
         default: "v1"
         required: false
         type: string
+      cache:
+        description: "Use the julia-actions/cache action for caching"
+        default: false
+        required: false
+        type: boolean
 
 jobs:
   detect:
@@ -116,4 +121,5 @@ jobs:
       coverage-directories: "${{ inputs.coverage-directories }}"
       apt-packages: "${{ inputs.apt-packages }}"
       container: "${{ inputs.container }}"
+      cache: ${{ inputs.cache }}
     secrets: "inherit"

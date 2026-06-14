@@ -112,7 +112,7 @@ jobs:
       fail-fast: false
       matrix:
         include: ${{ fromJson(needs.detect.outputs.matrix) }}
-    name: "${{ matrix.project }}${{ matrix.group != 'Core' && format(' [{0}]', matrix.group) || '' }} (julia ${{ matrix.version }})"
+    name: "${{ matrix.project }}${{ matrix.group != 'Core' && format(' [{0}]', matrix.group) || '' }} / Julia ${{ matrix.version }}"
     uses: "SciML/.github/.github/workflows/tests.yml@v1"
     with:
       project: "${{ matrix.project }}"

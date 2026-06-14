@@ -38,7 +38,7 @@ on:
         type: string
       cache:
         description: "Use the julia-actions/cache action for caching"
-        default: true
+        default: false
         required: false
         type: boolean
       coverage:

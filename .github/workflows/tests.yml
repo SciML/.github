@@ -109,7 +109,7 @@ on:
 
 jobs:
   tests:
-    name: "Tests${{ inputs.group != '' && format(' - {0}', inputs.group) || '' }}"
+    name: "Tests${{ inputs.group != '' && format(' - {0}', inputs.group) || '' }} (Julia ${{ inputs.julia-version }})"
     continue-on-error: ${{ inputs.continue-on-error || inputs.julia-version == 'nightly' }}
     runs-on: ${{ inputs.runner != '' && fromJson(inputs.runner) || (inputs.self-hosted && 'self-hosted' || inputs.os) }}
     container: ${{ inputs.container }}

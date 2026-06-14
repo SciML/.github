@@ -114,6 +114,9 @@ jobs:
       - name: "Report Coverage with Codecov"
         if: "${{ inputs.coverage }}"
         uses: codecov/codecov-action@v7
+        continue-on-error: true
         with:
           files: lcov.info
           token: "${{ secrets.CODECOV_TOKEN }}"
+          disable_safe_directory: true
+          fail_ci_if_error: false

@@ -20,7 +20,10 @@ concurrency:
 jobs:
   actionlint:
     name: "actionlint + shellcheck"
-    runs-on: ubuntu-latest
+    # Pinned to a GitHub-hosted runner: this job pulls a docker:// image, which the
+    # self-hosted pool (squats `ubuntu-latest`, no Docker) fails to pull. Self-hosted
+    # runners do not carry the `ubuntu-24.04` label, so this forces GitHub-hosted.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
       # The rhysd/actionlint image bundles shellcheck, so `run:` scripts in the

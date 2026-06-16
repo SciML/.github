@@ -90,7 +90,12 @@ jobs:
   test:
     needs: discover
     if: needs.discover.outputs.has_any == 'true'
-    runs-on: ubuntu-latest
+    # apt-packages / container legs need passwordless sudo / docker, absent on
+    # the SciML self-hosted demeter*/arctic* pool (which squats only the
+    # `ubuntu-latest` label, not `ubuntu-24.04`). Pin `ubuntu-24.04` to force
+    # GitHub-hosted in that case; otherwise keep `ubuntu-latest`, which the
+    # self-hosted pool answers (throughput).
+    runs-on: ${{ (inputs.apt-packages != '' || inputs.container != '') && fromJSON('["ubuntu-24.04"]') || 'ubuntu-latest' }}
     container: ${{ inputs.container }}
     strategy:
       fail-fast: false

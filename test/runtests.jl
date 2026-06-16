@@ -177,6 +177,12 @@ end
     @test Set((e.group, e.version) for e in build_root_matrix(d)) ==
           Set([("Core", "lts"), ("Core", "1"), ("Core", "pre")])
     @test all(e -> e.continue_on_error == false, build_root_matrix(d))
+    # The default matrix runner is self-hosted-capable `ubuntu-latest` (the
+    # SciML demeter*/arctic* pool answers that label). Only legs that set
+    # apt-packages/container are forced to GitHub-hosted, and that routing lives
+    # in the reusable workflows' runs-on expression (see the "runs-on conditional"
+    # testset), NOT in this matrix.
+    @test all(e -> e.runner == "ubuntu-latest", build_root_matrix(d))
 
     mkpath(joinpath(d, "test"))
     write(
@@ -280,4 +286,63 @@ end
     @test occursin("\"group\":\"Core\"", out)
     @test occursin("\"continue_on_error\":false", out)
     @test startswith(strip(out), "[") && endswith(strip(out), "]")
+end
+
+# The "force GitHub-hosted only for apt-packages/container legs" routing lives
+# in the reusable workflows' job-level `runs-on` expression, not in the matrix
+# script. The expression is a GitHub Actions ternary of the form
+#   (apt != '' || container != '') && fromJSON('["ubuntu-24.04"]') || <default>
+# Live routing can only be proven by a retagged run, but we can (a) assert the
+# real expression is present in each reusable, and (b) emulate GitHub Actions'
+# &&/|| short-circuit semantics to confirm it resolves to ubuntu-24.04 exactly
+# when apt-packages/container is set and otherwise preserves the default
+# (matrix runner / self-hosted / os) — including GPU self-hosted overrides.
+@testset "runs-on conditional: apt/container -> GitHub-hosted, else default" begin
+    wf(p) = joinpath(@__DIR__, "..", ".github", "workflows", p)
+
+    # GitHub Actions truthiness: only '', false, 0, null are falsy; a non-empty
+    # array (the fromJSON result) is truthy, so the ternary doesn't fall through.
+    # Emulate the three workflow expressions for given inputs.
+    function resolve(; apt, container, default)
+        (apt != "" || container != "") ? ["ubuntu-24.04"] : default
+    end
+
+    @testset "expression present in each reusable" begin
+        for (p, frag) in (
+                ("tests.yml", "(inputs.apt-packages != '' || inputs.container != '') && fromJSON('[\"ubuntu-24.04\"]')"),
+                ("downgrade.yml", "(inputs.apt-packages != '' || inputs.container != '') && fromJSON('[\"ubuntu-24.04\"]')"),
+                ("sublibrary-downgrade.yml", "(inputs.apt-packages != '' || inputs.container != '') && fromJSON('[\"ubuntu-24.04\"]')"),
+            )
+            txt = read(wf(p), String)
+            @test occursin(frag, txt)
+        end
+        # detect/discover helper jobs and sublibrary-project-tests are NOT routed
+        # (no apt/container) and must keep ubuntu-latest.
+        @test occursin("runs-on: ubuntu-latest", read(wf("grouped-tests.yml"), String))
+        @test occursin("runs-on: ubuntu-latest", read(wf("sublibrary-project-tests.yml"), String))
+        # sublibrary-project-tests passes no apt-packages/container through, so it
+        # never forces GitHub-hosted.
+        @test !occursin("apt-packages", read(wf("sublibrary-project-tests.yml"), String))
+        @test !occursin("ubuntu-24.04", read(wf("sublibrary-project-tests.yml"), String))
+    end
+
+    @testset "apt-packages set -> ubuntu-24.04 (GitHub-hosted)" begin
+        @test resolve(apt = "python3-scipy", container = "", default = "ubuntu-latest") == ["ubuntu-24.04"]
+        # even when the caller passed a self-hosted matrix runner, an apt leg is
+        # forced GitHub-hosted (apt provisioning needs passwordless sudo).
+        @test resolve(apt = "r-base-dev", container = "", default = ["self-hosted", "Linux", "X64", "gpu"]) == ["ubuntu-24.04"]
+    end
+
+    @testset "container set -> ubuntu-24.04 (GitHub-hosted)" begin
+        @test resolve(apt = "", container = "cmhyett/julia-fenics:latest", default = "ubuntu-latest") == ["ubuntu-24.04"]
+    end
+
+    @testset "neither set -> default preserved (self-hosted-capable)" begin
+        # default string `ubuntu-latest` (self-hosted pool squats this label).
+        @test resolve(apt = "", container = "", default = "ubuntu-latest") == "ubuntu-latest"
+        # GPU / explicit self-hosted runner override is preserved, NOT forced to
+        # ubuntu-24.04.
+        @test resolve(apt = "", container = "", default = ["self-hosted", "Linux", "X64", "gpu"]) ==
+              ["self-hosted", "Linux", "X64", "gpu"]
+    end
 end

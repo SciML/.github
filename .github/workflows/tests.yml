@@ -106,6 +106,11 @@ on:
         default: false
         required: false
         type: boolean
+      dotgithub-ref:
+        description: "Ref of SciML/.github to source the develop-sources helper script from"
+        default: "v1"
+        required: false
+        type: string
 
 jobs:
   tests:
@@ -139,41 +144,26 @@ jobs:
         with:
           token: "${{ secrets.GITHUB_TOKEN }}"
 
+      - name: "Checkout SciML/.github for the develop-sources helper"
+        if: "${{ inputs.buildpkg && inputs.project != '@.' && inputs.project != '.' }}"
+        uses: actions/checkout@v6
+        with:
+          repository: SciML/.github
+          ref: "${{ inputs.dotgithub-ref }}"
+          path: .sciml-dotgithub
+
       - name: "Develop in-repo [sources] path deps of ${{ inputs.project }}"
+        # On Julia < 1.11 the [sources] section is not auto-resolved during
+        # build/test, so develop the in-repo path deps the sub-project (e.g. a
+        # lib/* sublibrary) declares -- transitively, but skipping a developed
+        # dependency's *test-only* [sources] so they don't become phantom direct
+        # deps (SciML/Optimization.jl#1228). No-op on >= 1.11. See
+        # scripts/develop_sources.jl for the full rationale.
         if: "${{ inputs.buildpkg && inputs.project != '@.' && inputs.project != '.' }}"
         shell: julia --color=yes {0}
         run: |
-          using Pkg
-          proj = raw"${{ inputs.project }}"
-          # On Julia < 1.11 the [sources] section is not auto-resolved during
-          # build/test, so develop the in-repo path deps the sub-project (e.g. a
-          # lib/* sublibrary) declares -- transitively, since a source dep can
-          # itself declare further [sources]. No-op on >= 1.11 and for projects
-          # without a [sources] section.
-          if VERSION < v"1.11.0-DEV.0"
-            Pkg.activate(proj)
-            developed = Set{String}([normpath(abspath(proj))])  # never develop the active project (cyclic [sources])
-            specs = Pkg.PackageSpec[]
-            queue = String[proj]
-            while !isempty(queue)
-              dir = popfirst!(queue)
-              tomlpath = joinpath(dir, "Project.toml")
-              isfile(tomlpath) || continue
-              toml = Pkg.TOML.parsefile(tomlpath)
-              haskey(toml, "sources") || continue
-              for (dep, spec) in toml["sources"]
-                if spec isa Dict && haskey(spec, "path")
-                  p = normpath(abspath(joinpath(dir, spec["path"])))
-                  if isdir(p) && !(p in developed)
-                    push!(developed, p)
-                    push!(specs, Pkg.PackageSpec(path = p))
-                    push!(queue, p)  # resolve this dep's own [sources] too
-                  end
-                end
-              end
-            end
-            isempty(specs) || Pkg.develop(specs)
-          end
+          include(joinpath(".sciml-dotgithub", "scripts", "develop_sources.jl"))
+          develop_sources(raw"${{ inputs.project }}")
 
       - name: "Install system packages"
         if: "${{ inputs.apt-packages != '' && runner.os == 'Linux' }}"

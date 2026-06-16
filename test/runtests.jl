@@ -346,3 +346,86 @@ end
               ["self-hosted", "Linux", "X64", "gpu"]
     end
 end
+
+# develop_sources.jl: the [sources] develop helper used by tests.yml on Julia
+# <1.11. The pure path-collection (collect_source_paths) is tested here without
+# mutating any environment.
+include(joinpath(@__DIR__, "..", "scripts", "develop_sources.jl"))
+
+# Build a fixture monorepo. `Top` runtime-sources `Mid`; `Mid` runtime-sources
+# `Leaf` (in its [deps]) and test-only-sources `TestOnly` (only in its
+# [extras]/[targets].test, NOT [deps]). The walk from `Top` must develop the
+# runtime chain {Mid, Leaf} and must NOT pull in `Mid`'s test-only `TestOnly`.
+function make_sources_fixture()
+    root = mktempdir()
+    function pkg(name, toml)
+        d = joinpath(root, name)
+        mkpath(joinpath(d, "src"))
+        write(joinpath(d, "Project.toml"), toml)
+        write(joinpath(d, "src", "$name.jl"), "module $name\nend\n")
+        return d
+    end
+    pkg("Leaf", "name = \"Leaf\"\nuuid = \"11111111-1111-1111-1111-111111111111\"\n")
+    pkg("TestOnly", "name = \"TestOnly\"\nuuid = \"44444444-4444-4444-4444-444444444444\"\n")
+    pkg(
+        "Mid", """
+        name = "Mid"
+        uuid = "22222222-2222-2222-2222-222222222222"
+
+        [deps]
+        Leaf = "11111111-1111-1111-1111-111111111111"
+
+        [sources]
+        Leaf = {path = "../Leaf"}
+        TestOnly = {path = "../TestOnly"}
+
+        [extras]
+        TestOnly = "44444444-4444-4444-4444-444444444444"
+
+        [targets]
+        test = ["TestOnly"]
+        """
+    )
+    pkg(
+        "Top", """
+        name = "Top"
+        uuid = "33333333-3333-3333-3333-333333333333"
+
+        [deps]
+        Mid = "22222222-2222-2222-2222-222222222222"
+
+        [sources]
+        Mid = {path = "../Mid"}
+        """
+    )
+    return root
+end
+
+@testset "develop_sources: runtime [sources] developed, dep test-only [sources] excluded" begin
+    root = make_sources_fixture()
+    names = sort(basename.(collect_source_paths(joinpath(root, "Top"))))
+    # Runtime transitive chain Top -> Mid -> Leaf is developed.
+    @test names == ["Leaf", "Mid"]
+    # Mid's test-only source (TestOnly) is NOT pulled into Top's env
+    # (SciML/Optimization.jl#1228).
+    @test "TestOnly" ∉ names
+    # The active project (Top) is never self-developed.
+    @test "Top" ∉ names
+end
+
+@testset "develop_sources: package-under-test's OWN test-only [sources] ARE developed" begin
+    # When the project at the root of the walk is itself being tested, its
+    # test-only [sources] (e.g. OptimizationBase developing LBFGSB/Manopt for
+    # its own test suite) must still be developed -- only a *dependency's*
+    # test-only sources are filtered out.
+    root = make_sources_fixture()
+    names = sort(basename.(collect_source_paths(joinpath(root, "Mid"))))
+    # Testing Mid directly: its runtime source (Leaf) AND its test-only source
+    # (TestOnly) are both developed; only Leaf is then recursed into.
+    @test names == ["Leaf", "TestOnly"]
+end
+
+@testset "develop_sources: no [sources] table -> nothing to develop" begin
+    root = make_sources_fixture()
+    @test isempty(collect_source_paths(joinpath(root, "Leaf")))
+end

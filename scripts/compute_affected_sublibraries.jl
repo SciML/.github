@@ -21,7 +21,15 @@
 #   runner = ["self-hosted", "Linux", "X64", "gpu"]
 #
 # Optional fields per group:
-#   runner      — string or array of labels (default: "ubuntu-latest")
+#   runner      — string or array of labels (default: "ubuntu-24.04"). The
+#                 default is the PINNED ubuntu-24.04 label (NOT ubuntu-latest)
+#                 so default groups (Core/QA/…) land on GitHub-hosted runners:
+#                 the SciML self-hosted demeter*/arctic* pool squats the
+#                 ubuntu-latest label but not the pinned ubuntu-24.04 label, so
+#                 pinning forces GitHub-hosted (which has passwordless sudo for
+#                 apt provisioning). A group that needs self-hosted (e.g. GPU)
+#                 sets `runner` explicitly to a self-hosted label array, which
+#                 overrides this default and is preserved unchanged.
 #   os          — array of OS runners for an OS matrix (root matrix only; the
 #                 group runs once per OS, e.g. ["ubuntu-latest","windows-latest",
 #                 "macos-latest"]). Empty -> use `runner`. Don't combine with a
@@ -153,7 +161,7 @@ end
 
 function parse_test_group(config::AbstractDict)
     versions = convert(Vector{String}, config["versions"])
-    runner_raw = get(config, "runner", "ubuntu-latest")
+    runner_raw = get(config, "runner", "ubuntu-24.04")
     runner = runner_raw isa Vector ? convert(Vector{String}, runner_raw) : runner_raw::String
     timeout = Int(get(config, "timeout", 120))
     num_threads = Int(get(config, "num_threads", 1))
@@ -170,7 +178,7 @@ function load_test_groups(lib_dir::String, pkg::String)
         return Dict{String, TestGroupConfig}(name => parse_test_group(config) for (name, config) in toml)
     end
     return Dict{String, TestGroupConfig}(
-        k => TestGroupConfig(v, "ubuntu-latest", 120, 1, false, false, String[]) for (k, v) in DEFAULT_TEST_GROUPS
+        k => TestGroupConfig(v, "ubuntu-24.04", 120, 1, false, false, String[]) for (k, v) in DEFAULT_TEST_GROUPS
     )
 end
 
@@ -192,7 +200,7 @@ function load_root_test_groups(repo_root::String)
         isempty(groups) || return groups
     end
     return Dict{String, TestGroupConfig}(
-        k => TestGroupConfig(v, "ubuntu-latest", 120, 1, false, false, String[]) for (k, v) in DEFAULT_ROOT_GROUPS
+        k => TestGroupConfig(v, "ubuntu-24.04", 120, 1, false, false, String[]) for (k, v) in DEFAULT_ROOT_GROUPS
     )
 end
 

@@ -50,7 +50,9 @@ on:
 
 jobs:
   discover:
-    runs-on: ubuntu-latest
+    # Pinned label ubuntu-24.04 (NOT ubuntu-latest) forces GitHub-hosted; the
+    # self-hosted demeter*/arctic* pool squats ubuntu-latest but not this label.
+    runs-on: ubuntu-24.04
     outputs:
       projects: ${{ steps.list.outputs.projects }}
       has_any: ${{ steps.list.outputs.has_any }}
@@ -89,8 +91,11 @@ jobs:
 
   test:
     needs: discover
+    # Pinned label ubuntu-24.04 (NOT ubuntu-latest) forces GitHub-hosted: the
+    # self-hosted demeter*/arctic* pool squats ubuntu-latest but not the pinned
+    # label, and GitHub-hosted has passwordless sudo for apt-packages.
     if: needs.discover.outputs.has_any == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container: ${{ inputs.container }}
     strategy:
       fail-fast: false

@@ -69,7 +69,9 @@ on:
 
 jobs:
   detect:
-    runs-on: ubuntu-latest
+    # Pinned label ubuntu-24.04 (NOT ubuntu-latest) forces GitHub-hosted; the
+    # self-hosted demeter*/arctic* pool squats ubuntu-latest but not this label.
+    runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.compute.outputs.matrix }}
       has_changes: ${{ steps.compute.outputs.has_changes }}

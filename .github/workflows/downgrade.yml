@@ -39,8 +39,8 @@ on:
         required: false
         type: boolean
       os:
-        description: "The machine configuration on which the job needs to be run"
-        default: "ubuntu-latest"
+        description: "The machine configuration on which the job needs to be run. Defaults to the pinned label ubuntu-24.04 (NOT ubuntu-latest) so the downgrade leg lands on a GitHub-hosted runner: the SciML self-hosted demeter*/arctic* pool squats the ubuntu-latest label, but not the pinned ubuntu-24.04 label, so pinning forces GitHub-hosted (which has passwordless sudo for apt-packages provisioning)."
+        default: "ubuntu-24.04"
         required: false
         type: string
       apt-packages:

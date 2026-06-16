@@ -177,6 +177,9 @@ end
     @test Set((e.group, e.version) for e in build_root_matrix(d)) ==
           Set([("Core", "lts"), ("Core", "1"), ("Core", "pre")])
     @test all(e -> e.continue_on_error == false, build_root_matrix(d))
+    # Default runner is the pinned GitHub-hosted label (forces GitHub-hosted off
+    # the self-hosted pool that squats ubuntu-latest), NOT ubuntu-latest.
+    @test all(e -> e.runner == "ubuntu-24.04", build_root_matrix(d))
 
     mkpath(joinpath(d, "test"))
     write(
@@ -236,9 +239,9 @@ end
     @test length(core) == 6
     @test Set((e.version, e.runner) for e in core) ==
           Set((v, o) for v in ["lts", "1"] for o in ["ubuntu-latest", "windows-latest", "macos-latest"])
-    # QA: no os -> single default ubuntu runner.
+    # QA: no os -> single default GitHub-hosted runner (pinned ubuntu-24.04).
     qa = filter(e -> e.group == "QA", m)
-    @test length(qa) == 1 && only(qa).runner == "ubuntu-latest"
+    @test length(qa) == 1 && only(qa).runner == "ubuntu-24.04"
     # GPU: custom runner, no OS fan-out.
     gpu = filter(e -> e.group == "GPU", m)
     @test length(gpu) == 1 && only(gpu).runner == ["self-hosted", "Linux", "X64", "gpu"]

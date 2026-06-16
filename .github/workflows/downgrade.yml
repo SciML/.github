@@ -57,7 +57,11 @@ on:
 jobs:
   downgrade:
     name: "Downgrade Tests${{ inputs.group != '' && format(' - {0}', inputs.group) || '' }}"
-    runs-on: "${{ inputs.self-hosted && 'self-hosted' || inputs.os }}"
+    # apt-packages / container legs need passwordless sudo / docker, absent on
+    # the SciML self-hosted demeter*/arctic* pool (which squats only the
+    # `ubuntu-latest` label, not `ubuntu-24.04`). Pin `ubuntu-24.04` to force
+    # GitHub-hosted in that case; otherwise keep the self-hosted-capable default.
+    runs-on: ${{ (inputs.apt-packages != '' || inputs.container != '') && fromJSON('["ubuntu-24.04"]') || (inputs.self-hosted && 'self-hosted' || inputs.os) }}
     container: ${{ inputs.container }}
     steps:
       - uses: actions/checkout@v6

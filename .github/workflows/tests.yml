@@ -162,7 +162,11 @@ jobs:
         if: "${{ inputs.buildpkg && inputs.project != '@.' && inputs.project != '.' }}"
         shell: julia --color=yes {0}
         run: |
-          include(joinpath(".sciml-dotgithub", "scripts", "develop_sources.jl"))
+          # `shell: julia {0}` writes this body to a temp file under RUNNER_TEMP and
+          # runs it from there, so a *relative* `include` resolves against RUNNER_TEMP,
+          # not the workspace where `.sciml-dotgithub` was checked out. Anchor at
+          # GITHUB_WORKSPACE so it resolves regardless of the script's location.
+          include(joinpath(ENV["GITHUB_WORKSPACE"], ".sciml-dotgithub", "scripts", "develop_sources.jl"))
           develop_sources(raw"${{ inputs.project }}")
 
       - name: "Install system packages"

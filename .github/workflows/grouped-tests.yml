@@ -81,9 +81,9 @@ jobs:
     outputs:
       matrix: ${{ steps.compute.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: "Checkout SciML/.github for the matrix script"
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: SciML/.github
           ref: "${{ inputs.dotgithub-ref }}"

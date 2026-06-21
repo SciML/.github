@@ -64,7 +64,7 @@ jobs:
     runs-on: ${{ (inputs.apt-packages != '' || inputs.container != '') && fromJSON('["ubuntu-24.04"]') || (inputs.self-hosted && 'self-hosted' || inputs.os) }}
     container: ${{ inputs.container }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: julia-actions/setup-julia@v3
         with:

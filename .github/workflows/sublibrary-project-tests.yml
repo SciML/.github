@@ -74,11 +74,11 @@ jobs:
       matrix: ${{ steps.compute.outputs.matrix }}
       has_changes: ${{ steps.compute.outputs.has_changes }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: "Checkout SciML/.github for the detection script"
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: SciML/.github
           ref: "${{ inputs.dotgithub-ref }}"

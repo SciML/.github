@@ -56,6 +56,15 @@ on:
         required: false
         type: boolean
 
+# `deploydocs` pushes to gh-pages via GITHUB_TOKEN (when no DOCUMENTER_KEY), which
+# needs `contents: write`. Set it here in the reusable so consumer caller jobs don't
+# each have to grant it (the prior per-repo permissions blocks dropped in the CI
+# centralization migration were the symptom; this is the fix at the source).
+permissions:
+  actions: write
+  contents: write
+  statuses: write
+
 jobs:
   tests:
     name: "Build and Deploy Documentation"

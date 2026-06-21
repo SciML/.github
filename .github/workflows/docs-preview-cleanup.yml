@@ -26,7 +26,7 @@ jobs:
       contents: write
     steps:
       - name: "Checkout ${{ inputs.preview-branch }}"
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: "${{ inputs.preview-branch }}"
       - name: "Delete preview and squash history"

@@ -25,7 +25,7 @@ jobs:
     # runners do not carry the `ubuntu-24.04` label, so this forces GitHub-hosted.
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       # The rhysd/actionlint image bundles shellcheck, so `run:` scripts in the
       # workflows are shellcheck-linted too.
       - name: "Lint workflows"
@@ -37,7 +37,7 @@ jobs:
     name: "compute_affected_sublibraries.jl tests"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: julia-actions/setup-julia@v3
         with:
           version: "1"

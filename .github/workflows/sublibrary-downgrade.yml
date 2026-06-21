@@ -55,7 +55,7 @@ jobs:
       projects: ${{ steps.list.outputs.projects }}
       has_any: ${{ steps.list.outputs.has_any }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: "List lib/* sublibraries with a Project.toml (minus exclude)"
         id: list
         run: |
@@ -102,7 +102,7 @@ jobs:
       matrix:
         project: ${{ fromJson(needs.discover.outputs.projects) }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: julia-actions/setup-julia@v3
         with:
           version: ${{ inputs.julia-version }}

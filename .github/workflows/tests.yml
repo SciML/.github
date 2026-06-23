@@ -145,7 +145,7 @@ jobs:
           token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: "Checkout SciML/.github for the develop-sources helper"
-        if: "${{ inputs.buildpkg && inputs.project != '@.' && inputs.project != '.' }}"
+        if: "${{ inputs.buildpkg && inputs.project != '@.' }}"
         uses: actions/checkout@v7
         with:
           repository: SciML/.github
@@ -154,12 +154,18 @@ jobs:
 
       - name: "Develop in-repo [sources] path deps of ${{ inputs.project }}"
         # On Julia < 1.11 the [sources] section is not auto-resolved during
-        # build/test, so develop the in-repo path deps the sub-project (e.g. a
-        # lib/* sublibrary) declares -- transitively, but skipping a developed
-        # dependency's *test-only* [sources] so they don't become phantom direct
-        # deps (SciML/Optimization.jl#1228). No-op on >= 1.11. See
-        # scripts/develop_sources.jl for the full rationale.
-        if: "${{ inputs.buildpkg && inputs.project != '@.' && inputs.project != '.' }}"
+        # build/test, so develop the in-repo path deps the sub-project declares
+        # -- transitively, but skipping a developed dependency's *test-only*
+        # [sources] so they don't become phantom direct deps
+        # (SciML/Optimization.jl#1228). No-op on >= 1.11. This covers both a
+        # lib/* sublibrary (project: lib/<name>) AND a monorepo *root* project
+        # (project: '.') whose [sources] pin in-repo siblings (e.g.
+        # OptimalUncertaintyQuantification's root deps on its lib/* packages):
+        # without developing them, `julia-buildpkg` on the LTS fails with
+        # "expected package <Sibling> ... to be registered". Only the default
+        # environment sentinel '@.' (an ordinary single package with no in-repo
+        # [sources]) is exempt. See scripts/develop_sources.jl for the rationale.
+        if: "${{ inputs.buildpkg && inputs.project != '@.' }}"
         shell: julia --color=yes {0}
         run: |
           # `shell: julia {0}` writes this body to a temp file under RUNNER_TEMP and

@@ -14,7 +14,10 @@
 #   versions = ["lts", "1", "pre"]
 #
 #   [QA]
-#   versions = ["lts", "1"]
+#   versions = ["lts", "1"]   # NOTE: ignored — QA always runs once on "1".
+#                             # Aqua/JET/ExplicitImports are version-agnostic, so
+#                             # the QA group is centrally clamped to ["1"] (see
+#                             # QA_VERSIONS); no need to trim this per repo.
 #
 #   [GPU]
 #   versions = ["1"]
@@ -39,7 +42,7 @@
 #
 # If no test/test_groups.toml exists, the default is:
 #   Core on ["lts", "1", "pre"]
-#   QA on ["lts", "1"]
+#   QA on ["1"]
 #
 # A group that needs test-only deps beyond the sublibrary's [targets].test list should
 # carry an isolated environment at test/<group>/Project.toml that runtests.jl activates
@@ -76,7 +79,7 @@ using TOML
 
 const DEFAULT_TEST_GROUPS = Dict(
     "Core" => ["lts", "1", "pre"],
-    "QA" => ["lts", "1"],
+    "QA" => ["1"],
 )
 
 function build_dependency_graph(lib_dir::String)
@@ -241,6 +244,13 @@ const EXCLUDES = Set(
 
 const DOWNSTREAM_VERSION = "1"
 
+# QA (Aqua/JET/ExplicitImports) is version-agnostic, so running it per declared
+# version just doubles the job count with no added signal — and the lts half is
+# where the <1.11 [sources]-backport QA failures bite. Central policy: the QA
+# group always runs once, on the latest stable, regardless of the per-repo
+# [QA] versions. Repos therefore needn't trim [QA] versions in test_groups.toml.
+const QA_VERSIONS = ["1"]
+
 function build_matrix(
         direct::Set{String}, transitive::Set{String}, lib_dir::String
     )
@@ -255,7 +265,8 @@ function build_matrix(
             is_downstream && config.local_only && continue
             ci_group = group_name == "Core" ? pkg : "$(pkg)_$(group_name)"
             # Downstream (transitive) deps only run on latest stable.
-            versions = is_downstream ? [DOWNSTREAM_VERSION] : config.versions
+            versions = group_name == "QA" ? QA_VERSIONS :
+                is_downstream ? [DOWNSTREAM_VERSION] : config.versions
             for ver in versions
                 (ci_group, ver) in EXCLUDES && continue
                 push!(
@@ -313,7 +324,8 @@ function build_projects_matrix(
             config = groups[group_name]
             is_downstream && config.local_only && continue
             ci_group = group_name == "Core" ? pkg : "$(pkg)_$(group_name)"
-            versions = is_downstream ? [DOWNSTREAM_VERSION] : config.versions
+            versions = group_name == "QA" ? QA_VERSIONS :
+                is_downstream ? [DOWNSTREAM_VERSION] : config.versions
             for ver in versions
                 (ci_group, ver) in EXCLUDES && continue
                 push!(
@@ -370,7 +382,8 @@ function build_root_matrix(repo_root::String)
     for group_name in sort!(collect(keys(groups)))
         config = groups[group_name]
         runners = isempty(config.os) ? Any[config.runner] : Any[o for o in config.os]
-        for ver in config.versions
+        vers = group_name == "QA" ? QA_VERSIONS : config.versions
+        for ver in vers
             for runner in runners
                 push!(
                     entries,

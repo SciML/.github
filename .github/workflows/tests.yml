@@ -191,6 +191,13 @@ jobs:
         # read e.g. ODEDIFFEQ_TEST_GROUP work the same as the default GROUP. The
         # name must be dynamic, which the env: map can't express, so write it to
         # $GITHUB_ENV here.
+        #
+        # shell: bash is required: the default shell on windows runners is
+        # PowerShell, which does not expand the bash-style "$GITHUB_ENV" (it would
+        # write to a file literally named $GITHUB_ENV instead), so the group env
+        # var would silently never be set and the package's runtests.jl would fall
+        # back to its default group (e.g. "All") on Windows only.
+        shell: bash
         run: echo "${{ inputs.group-env-name }}=${{ inputs.group }}" >> "$GITHUB_ENV"
 
       - name: "Run tests ${{ inputs.self-hosted && '' || format('on {0}', inputs.os) }} with Julia v${{ inputs.julia-version }}"

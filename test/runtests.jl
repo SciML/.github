@@ -82,10 +82,10 @@ end
     @testset "projects-matrix: default groups + downstream→v1" begin
         direct, trans = compute_affected(["lib/A/src/A.jl"], graph, rev)
         m = build_projects_matrix(direct, trans, lib)
-        # A is directly changed: default Core on lts,1,pre + QA on lts,1
+        # A is directly changed: default Core on lts,1,pre + QA on 1 (QA defaults to v1 only)
         a = filter(e -> e.project == "lib/A", m)
         @test Set((e.group, e.version) for e in a) ==
-              Set([("Core", "lts"), ("Core", "1"), ("Core", "pre"), ("QA", "lts"), ("QA", "1")])
+              Set([("Core", "lts"), ("Core", "1"), ("Core", "pre"), ("QA", "1")])
         # B and C are downstream: version "1" only
         for p in ("lib/B", "lib/C")
             ds = filter(e -> e.project == p, m)
@@ -210,7 +210,8 @@ end
     m = build_root_matrix(d)
     cells = Set((e.group, e.version) for e in m)
     @test ("AD", "1") ∉ cells && ("AD", "pre") ∉ cells && ("AD", "lts") in cells
-    @test ("QA", "pre") ∉ cells && ("QA", "lts") in cells && ("QA", "1") in cells
+    # QA is centrally clamped to v1 only, regardless of the per-group `versions`.
+    @test ("QA", "pre") ∉ cells && ("QA", "lts") ∉ cells && ("QA", "1") in cells
     # continue_on_error rides only on the Downstream group.
     @test all(e -> e.continue_on_error, filter(e -> e.group == "Downstream", m))
     @test all(e -> !e.continue_on_error, filter(e -> e.group != "Downstream", m))
@@ -252,8 +253,8 @@ end
 
 @testset "root matrix faithfully reproduces OrdinaryDiffEq's embedded matrix" begin
     # ODE's root CI.yml is 17 groups × [lts,1,pre] minus excludes (AD->lts only,
-    # QA->lts/1, ODEInterfaceRegression->lts only). Per-group `versions`
-    # expresses the same 46 cells, which is the migration this enables.
+    # ODEInterfaceRegression->lts only). QA is centrally clamped to v1 only (see
+    # QA_VERSIONS), so it intentionally diverges from ODE's old QA-on-lts/1: 45 cells.
     base = [
         "InterfaceI", "InterfaceII", "InterfaceIII", "InterfaceIV", "InterfaceV",
         "Integrators_I", "Integrators_II", "AlgConvergence_I", "AlgConvergence_II",
@@ -273,11 +274,11 @@ end
     cells = Set((e.group, e.version) for e in build_root_matrix(d))
     groups17 = vcat(base, ["AD", "QA", "ODEInterfaceRegression"])
     expected = Set((g, v) for g in groups17 for v in ["lts", "1", "pre"])
-    for ex in [("AD", "1"), ("AD", "pre"), ("QA", "pre"), ("ODEInterfaceRegression", "1"), ("ODEInterfaceRegression", "pre")]
+    for ex in [("AD", "1"), ("AD", "pre"), ("QA", "pre"), ("QA", "lts"), ("ODEInterfaceRegression", "1"), ("ODEInterfaceRegression", "pre")]
         delete!(expected, ex)
     end
     @test cells == expected
-    @test length(cells) == 46
+    @test length(cells) == 45
 end
 
 @testset "--root-matrix CLI (no lib/ required) + JSON shape" begin

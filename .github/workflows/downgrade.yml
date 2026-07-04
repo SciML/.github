@@ -33,6 +33,11 @@ on:
         default: "deps"
         required: false
         type: string
+      no_promote:
+        description: "Comma-separated weakdep extensions kept as weakdeps (not floor-checked) during merged downgrade resolution. Defaults to Mooncake, whose dependency graph Resolver.jl cannot --min-resolve (StefanKarpinski/Resolver.jl#24), so its floor-check is skipped fleet-wide while every other weakdep extension is still floor-checked. Passed to julia-actions/julia-downgrade-compat."
+        default: "Mooncake"
+        required: false
+        type: string
       self-hosted:
         description: "Run the job on a self hosted machine"
         default: false
@@ -122,6 +127,7 @@ jobs:
           skip: "${{ env.EFFECTIVE_SKIP }}"
           projects: "${{ inputs.projects }}"
           mode: "${{ inputs.mode != '' && inputs.mode || 'deps' }}"
+          no_promote: "${{ inputs.no_promote }}"
 
       - name: "Install system packages"
         if: "${{ inputs.apt-packages != '' && runner.os == 'Linux' }}"

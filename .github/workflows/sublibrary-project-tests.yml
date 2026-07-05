@@ -71,7 +71,19 @@ jobs:
   detect:
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.compute.outputs.matrix }}
+      # The affected-sublibrary matrix, split into fixed-size shards so no single
+      # test job's strategy.matrix exceeds GitHub's hard 256-jobs-per-matrix cap.
+      # Above that cap GitHub refuses to instantiate ANY cell and fails the run
+      # with no jobs created (a monorepo-wide QA/EI conversion can touch enough
+      # sublibraries to blow past it). Each shard_N feeds a separate test-N job.
+      shard_1: ${{ steps.compute.outputs.shard_1 }}
+      shard_2: ${{ steps.compute.outputs.shard_2 }}
+      shard_3: ${{ steps.compute.outputs.shard_3 }}
+      shard_4: ${{ steps.compute.outputs.shard_4 }}
+      has_1: ${{ steps.compute.outputs.has_1 }}
+      has_2: ${{ steps.compute.outputs.has_2 }}
+      has_3: ${{ steps.compute.outputs.has_3 }}
+      has_4: ${{ steps.compute.outputs.has_4 }}
       has_changes: ${{ steps.compute.outputs.has_changes }}
     steps:
       - uses: actions/checkout@v7
@@ -103,20 +115,111 @@ jobs:
           echo "$CHANGED" | grep "^lib/" || echo "(none)"
           MATRIX=$(echo "$CHANGED" | julia .sciml-dotgithub/scripts/compute_affected_sublibraries.jl . --projects-matrix)
           echo "Matrix: $MATRIX"
-          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
-          if [ "$MATRIX" = "[]" ]; then
+          # Shard the include list into <=SHARD_SIZE-cell batches. Four shards of
+          # 200 cover 800 cells (far past any realistic affected-set) while every
+          # per-job matrix stays under GitHub's 256 cap.
+          SHARD_SIZE=200
+          TOTAL=$(echo "$MATRIX" | jq 'length')
+          echo "Total matrix cells: $TOTAL"
+          if [ "$TOTAL" -gt 800 ]; then
+            echo "::error::Affected-sublibrary matrix has $TOTAL cells (> 800 shard capacity). Add another shard_N/test-N pair in sublibrary-project-tests.yml."
+            exit 1
+          fi
+          if [ "$TOTAL" = "0" ]; then
             echo "has_changes=false" >> "$GITHUB_OUTPUT"
           else
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
           fi
+          for i in 1 2 3 4; do
+            START=$(( (i - 1) * SHARD_SIZE ))
+            SHARD=$(echo "$MATRIX" | jq -c ".[${START}:$(( START + SHARD_SIZE ))]")
+            echo "shard_${i}=${SHARD}" >> "$GITHUB_OUTPUT"
+            if [ "$(echo "$SHARD" | jq 'length')" = "0" ]; then
+              echo "has_${i}=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "has_${i}=true" >> "$GITHUB_OUTPUT"
+            fi
+          done
 
-  test:
+  test-1:
     needs: detect
-    if: needs.detect.outputs.has_changes == 'true'
+    if: needs.detect.outputs.has_1 == 'true'
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJson(needs.detect.outputs.matrix) }}
+        include: ${{ fromJson(needs.detect.outputs.shard_1) }}
+    name: "${{ matrix.project }}${{ matrix.group != 'Core' && format(' [{0}]', matrix.group) || '' }} / Julia ${{ matrix.version }}"
+    uses: "SciML/.github/.github/workflows/tests.yml@v1"
+    with:
+      project: "${{ matrix.project }}"
+      group: "${{ matrix.group }}"
+      group-env-name: "${{ inputs.group-env-name }}"
+      julia-version: "${{ matrix.version }}"
+      runner: ${{ toJson(matrix.runner) }}
+      timeout-minutes: ${{ matrix.timeout }}
+      num-threads: "${{ matrix.num_threads }}"
+      check-bounds: "${{ inputs.check-bounds }}"
+      allow-reresolve: ${{ inputs.allow-reresolve }}
+      coverage: ${{ inputs.coverage }}
+      coverage-directories: "${{ matrix.project }}/src,${{ matrix.project }}/ext"
+      cache: ${{ inputs.cache }}
+    secrets: "inherit"
+
+  test-2:
+    needs: detect
+    if: needs.detect.outputs.has_2 == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.detect.outputs.shard_2) }}
+    name: "${{ matrix.project }}${{ matrix.group != 'Core' && format(' [{0}]', matrix.group) || '' }} / Julia ${{ matrix.version }}"
+    uses: "SciML/.github/.github/workflows/tests.yml@v1"
+    with:
+      project: "${{ matrix.project }}"
+      group: "${{ matrix.group }}"
+      group-env-name: "${{ inputs.group-env-name }}"
+      julia-version: "${{ matrix.version }}"
+      runner: ${{ toJson(matrix.runner) }}
+      timeout-minutes: ${{ matrix.timeout }}
+      num-threads: "${{ matrix.num_threads }}"
+      check-bounds: "${{ inputs.check-bounds }}"
+      allow-reresolve: ${{ inputs.allow-reresolve }}
+      coverage: ${{ inputs.coverage }}
+      coverage-directories: "${{ matrix.project }}/src,${{ matrix.project }}/ext"
+      cache: ${{ inputs.cache }}
+    secrets: "inherit"
+
+  test-3:
+    needs: detect
+    if: needs.detect.outputs.has_3 == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.detect.outputs.shard_3) }}
+    name: "${{ matrix.project }}${{ matrix.group != 'Core' && format(' [{0}]', matrix.group) || '' }} / Julia ${{ matrix.version }}"
+    uses: "SciML/.github/.github/workflows/tests.yml@v1"
+    with:
+      project: "${{ matrix.project }}"
+      group: "${{ matrix.group }}"
+      group-env-name: "${{ inputs.group-env-name }}"
+      julia-version: "${{ matrix.version }}"
+      runner: ${{ toJson(matrix.runner) }}
+      timeout-minutes: ${{ matrix.timeout }}
+      num-threads: "${{ matrix.num_threads }}"
+      check-bounds: "${{ inputs.check-bounds }}"
+      allow-reresolve: ${{ inputs.allow-reresolve }}
+      coverage: ${{ inputs.coverage }}
+      coverage-directories: "${{ matrix.project }}/src,${{ matrix.project }}/ext"
+      cache: ${{ inputs.cache }}
+    secrets: "inherit"
+
+  test-4:
+    needs: detect
+    if: needs.detect.outputs.has_4 == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.detect.outputs.shard_4) }}
     name: "${{ matrix.project }}${{ matrix.group != 'Core' && format(' [{0}]', matrix.group) || '' }} / Julia ${{ matrix.version }}"
     uses: "SciML/.github/.github/workflows/tests.yml@v1"
     with:

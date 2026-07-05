@@ -634,7 +634,11 @@ The script's output modes:
 
 Lists the affected `lib/*` (with change detection) and runs each via
 `tests.yml` `project: lib/X`, expanding `test_groups.toml`. No root dispatcher
-needed.
+needed. The affected-sublibrary matrix is sharded into 200-cell batches across
+parallel `test-N` jobs so no single `strategy.matrix` exceeds GitHub's hard
+256-jobs-per-matrix cap (above it GitHub instantiates no cells and fails the run
+with nothing scheduled — reached by monorepo-wide changes that touch many
+sublibraries at once, e.g. a QA/ExplicitImports conversion).
 
 | Input | Type | Default | Description |
 |---|---|---|---|

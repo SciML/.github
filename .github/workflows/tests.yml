@@ -135,6 +135,28 @@ jobs:
           version: "${{ inputs.julia-version }}"
           arch: "${{ inputs.julia-arch || runner.arch }}"
 
+      - name: "Gate the pre lane to release candidates only"
+        # The `pre` channel installs the latest Julia prerelease. Early alphas/
+        # betas -- and the case where `pre` just resolves to the current stable
+        # release (no prerelease newer than it) -- are not worth blocking CI on;
+        # only a release candidate is close enough to a release to matter. So when
+        # `pre` is not an `-rc*`, skip build+test and report the lane as passing;
+        # RC prereleases run normally. Only affects the `pre` lane; every other
+        # julia-version runs unconditionally.
+        id: prerelease-gate
+        if: "${{ inputs.julia-version == 'pre' }}"
+        shell: bash
+        run: |
+          version=$(julia -e 'print(string(VERSION))')
+          tag=$(julia -e 'print(isempty(VERSION.prerelease) ? "" : String(VERSION.prerelease[1]))')
+          if [[ "$tag" == rc* ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=pre lane::Julia $version is a release candidate; running the pre lane normally."
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=pre lane skipped::Julia $version is not a release candidate (prerelease='${tag:-none}'); skipping build+test and reporting the pre lane as passing."
+          fi
+
       - uses: julia-actions/cache@v3
         # Skip caching on self-hosted runners: demeter has a persistent, already
         # warm depot (20-29GB), so the cache always MISSES and the post-job save
@@ -145,7 +167,7 @@ jobs:
           token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: "Checkout SciML/.github for the develop-sources helper"
-        if: "${{ inputs.buildpkg && inputs.project != '@.' }}"
+        if: "${{ inputs.buildpkg && inputs.project != '@.' && steps.prerelease-gate.outputs.run != 'false' }}"
         uses: actions/checkout@v7
         with:
           repository: SciML/.github
@@ -165,7 +187,7 @@ jobs:
         # "expected package <Sibling> ... to be registered". Only the default
         # environment sentinel '@.' (an ordinary single package with no in-repo
         # [sources]) is exempt. See scripts/develop_sources.jl for the rationale.
-        if: "${{ inputs.buildpkg && inputs.project != '@.' }}"
+        if: "${{ inputs.buildpkg && inputs.project != '@.' && steps.prerelease-gate.outputs.run != 'false' }}"
         shell: julia --color=yes {0}
         run: |
           # `shell: julia {0}` writes this body to a temp file under RUNNER_TEMP and
@@ -176,13 +198,13 @@ jobs:
           develop_sources(raw"${{ inputs.project }}")
 
       - name: "Install system packages"
-        if: "${{ inputs.apt-packages != '' && runner.os == 'Linux' }}"
+        if: "${{ inputs.apt-packages != '' && runner.os == 'Linux' && steps.prerelease-gate.outputs.run != 'false' }}"
         run: |
           sudo apt-get update
           sudo apt-get install -y ${{ inputs.apt-packages }}
 
       - uses: julia-actions/julia-buildpkg@v1
-        if: "${{ inputs.buildpkg }}"
+        if: "${{ inputs.buildpkg && steps.prerelease-gate.outputs.run != 'false' }}"
         with:
           project: "${{ inputs.project }}"
 
@@ -191,9 +213,11 @@ jobs:
         # read e.g. ODEDIFFEQ_TEST_GROUP work the same as the default GROUP. The
         # name must be dynamic, which the env: map can't express, so write it to
         # $GITHUB_ENV here.
+        if: "${{ steps.prerelease-gate.outputs.run != 'false' }}"
         run: echo "${{ inputs.group-env-name }}=${{ inputs.group }}" >> "$GITHUB_ENV"
 
       - name: "Run tests ${{ inputs.self-hosted && '' || format('on {0}', inputs.os) }} with Julia v${{ inputs.julia-version }}"
+        if: "${{ steps.prerelease-gate.outputs.run != 'false' }}"
         uses: julia-actions/julia-runtest@v1
         with:
           project: "${{ inputs.project }}"

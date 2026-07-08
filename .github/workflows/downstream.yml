@@ -92,6 +92,8 @@ jobs:
 
       - name: "Run tests ${{ inputs.self-hosted && '' || format('on {0}', inputs.os) }} with Julia v${{ inputs.julia-version }}"
         shell: julia --color=yes --project=downstream {0}
+        env:
+          GROUP: ${{ inputs.group }}
         run: |
           using Pkg
           try

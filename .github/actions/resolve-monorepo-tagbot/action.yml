@@ -1,0 +1,40 @@
+name: "Resolve monorepo TagBot target"
+description: "Route a JuliaTagBot registry notification to the matching package in a Julia monorepo"
+
+inputs:
+  token:
+    description: "GitHub token used to read the referenced General registry pull request"
+    required: true
+  package:
+    description: "Package name for a manual targeted run; empty runs a full audit"
+    default: ""
+    required: false
+  comment-body:
+    description: "JuliaTagBot issue comment body"
+    default: ""
+    required: false
+
+outputs:
+  subdirs:
+    description: "JSON array of package subdirectories; the root package is represented by an empty string"
+    value: "${{ steps.resolve.outputs.subdirs }}"
+  mode:
+    description: "Resolution mode: registry-pr, manual, or full-audit"
+    value: "${{ steps.resolve.outputs.mode }}"
+  package:
+    description: "Resolved package name for a targeted run"
+    value: "${{ steps.resolve.outputs.package }}"
+  version:
+    description: "Registered version parsed from the General pull request"
+    value: "${{ steps.resolve.outputs.version }}"
+
+runs:
+  using: "composite"
+  steps:
+    - id: resolve
+      shell: bash
+      env:
+        TAGBOT_COMMENT_BODY: "${{ inputs.comment-body }}"
+        TAGBOT_MANUAL_PACKAGE: "${{ inputs.package }}"
+        TAGBOT_GITHUB_TOKEN: "${{ inputs.token }}"
+      run: python3 "$GITHUB_ACTION_PATH/resolve.py"

@@ -44,3 +44,11 @@ jobs:
       - uses: julia-actions/cache@v3
       - name: "Run detection-script tests"
         run: julia --color=yes test/runtests.jl
+
+  tagbot-resolver-tests:
+    name: "monorepo TagBot resolver tests"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: "Run resolver tests"
+        run: python3 -m unittest discover -s test -p 'test_resolve_monorepo_tagbot.py' -v

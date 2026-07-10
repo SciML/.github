@@ -26,7 +26,8 @@ Two things live here:
     [`downgrade.yml`](#downgradeyml) · [`documentation.yml`](#documentationyml) ·
     [`runic.yml`](#runicyml) · [`format-check.yml` / `format-suggestions-on-pr.yml`](#format-checkyml--format-suggestions-on-pryml) ·
     [`spellcheck.yml`](#spellcheckyml) · [`benchmark.yml`](#benchmarkyml) ·
-    [`tagbot.yml`](#tagbotyml) · [`dependabot-automerge.yml`](#dependabot-automergeyml) ·
+    [`tagbot.yml`](#tagbotyml) · [`monorepo-tagbot.yml`](#monorepo-tagbotyml) ·
+    [`dependabot-automerge.yml`](#dependabot-automergeyml) ·
     [`docs-preview-cleanup.yml`](#docs-preview-cleanupyml) ·
     [`major-version-tag.yml`](#major-version-tagyml)
 - [Monorepos: sublibrary CI](#monorepos-sublibrary-ci)
@@ -114,7 +115,7 @@ lines:
 | `Documentation.yml` | `documentation.yml@v1` | Build & deploy docs |
 | `FormatCheck.yml` | `runic.yml@v1` | Runic format check |
 | `SpellCheck.yml` | `spellcheck.yml@v1` | Spell-check with `typos` |
-| `TagBot.yml` | `tagbot.yml@v1` | Create releases/tags on registration |
+| `TagBot.yml` | `tagbot.yml@v1` | Create releases/tags for a single-package repository |
 | `DocPreviewCleanup.yml` | `docs-preview-cleanup.yml@v1` | Delete closed-PR doc previews |
 
 Monorepos (a package with `lib/<sublibrary>/` sub-packages) add one more —
@@ -332,16 +333,17 @@ and reports results on PRs. Input: `julia-version` (`"1"`).
 
 Creates GitHub releases/tags when a package is registered, via
 [JuliaRegistries/TagBot](https://github.com/JuliaRegistries/TagBot). Tags one
-package — the root, or a monorepo sublibrary when `subdir` is set. The
+package — the repository root, or a package at `subdir`. The
 if-guard (`workflow_dispatch` or `JuliaTagBot` actor) and the permissions block
 live in the reusable workflow; the caller keeps the `issue_comment` /
 `workflow_dispatch` triggers. `token` and `ssh` (`DOCUMENTER_KEY`) come from
-`secrets: inherit`.
+`secrets: inherit`. Monorepos should use [`monorepo-tagbot.yml`](#monorepo-tagbotyml)
+instead of calling this workflow once per package.
 
 | Input | Type | Default | Description |
 |---|---|---|---|
 | `subdir` | string | `""` | Package subdirectory to tag (e.g. `lib/Foo` for a sublibrary); empty for the root. |
-| `lookback` | string | `"3"` | TagBot lookback window in days (manual `workflow_dispatch` runs). |
+| `lookback` | string | `"3"` | Deprecated and ignored; retained so existing v1 callers remain valid. |
 
 ```yaml
 # .github/workflows/TagBot.yml
@@ -356,21 +358,39 @@ jobs:
     secrets: "inherit"
 ```
 
-Monorepo (tag the root + each sublibrary):
+### `monorepo-tagbot.yml`
+
+Routes a monorepo registration to one TagBot invocation. For a JuliaTagBot
+issue comment, the resolver reads the referenced General registry pull request,
+extracts the package name, validates it against the root and
+`lib/*/Project.toml`, and runs `tagbot.yml` only for that package. A retry
+notification without a General pull-request URL, or a manual run without a
+`package`, performs a full root-plus-sublibraries audit with `max-parallel: 1`.
+Runs targeting the same package share a concurrency group, so duplicate
+notifications do not execute that package concurrently.
+
+| Input | Type | Default | Description |
+|---|---|---|---|
+| `package` | string | `""` | Package name for a manual targeted run; empty performs a full audit. Ignored for JuliaTagBot registry notifications. |
+
+Monorepo caller:
 
 ```yaml
+name: TagBot
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "Package name to tag; empty audits every package"
+        required: false
+        type: string
 jobs:
   tagbot:
-    uses: "SciML/.github/.github/workflows/tagbot.yml@v1"
-    secrets: "inherit"
-  tagbot-sublibraries:
-    strategy:
-      fail-fast: false
-      matrix:
-        package: [lib/Foo, lib/Bar]
-    uses: "SciML/.github/.github/workflows/tagbot.yml@v1"
+    uses: "SciML/.github/.github/workflows/monorepo-tagbot.yml@v1"
     with:
-      subdir: "${{ matrix.package }}"
+      package: "${{ inputs.package }}"
     secrets: "inherit"
 ```
 

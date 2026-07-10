@@ -31,9 +31,9 @@ the target conventions below, not the transitional state. The in-flight work:
   matrices move to the standard sets in §5 (`["lts","1","pre"]` for base/`Core`
   groups; `["lts","1"]` for `QA`; `["1"]` for `GPU`). OrdinaryDiffEq is being
   updated to these.
-- **The fleet TagBot thin-caller conversion** — every repo's `TagBot.yml`
-  becomes a thin caller of `tagbot.yml@v1` (root + a subpackages matrix for
-  monorepos), replacing the inlined `JuliaRegistries/TagBot@v1` steps (§6).
+- **The fleet TagBot thin-caller conversion** — every monorepo's `TagBot.yml`
+  becomes a thin caller of `monorepo-tagbot.yml@v1`, replacing inlined
+  `JuliaRegistries/TagBot@v1` matrices with targeted package routing (§6).
 
 Where a value below differs from what you currently see in OrdinaryDiffEq.jl
 `master`, the value below is the one to adopt.
@@ -637,18 +637,16 @@ jobs:
     secrets: "inherit"
 ```
 
-### `TagBot.yml` → thin caller of `tagbot.yml@v1` (root + subpackages matrix)
+### `TagBot.yml` → targeted `monorepo-tagbot.yml@v1` caller
 
-TagBot is a **thin caller** of the reusable `tagbot.yml@v1`, exactly like every
-other workflow. Do **not** inline `permissions`, the `if`-guard, or
-`JuliaRegistries/TagBot@v1` steps — those all live in the reusable workflow. The
-caller only keeps the `issue_comment` / `workflow_dispatch` triggers (TagBot is
-driven by the JuliaRegistrator comment) and forwards `secrets: "inherit"`
-(`token` / `ssh` `DOCUMENTER_KEY` come through inherit).
-
-A **monorepo** caller has two jobs: one `tagbot` job for the umbrella root, plus
-a `tagbot-subpackages` matrix job that calls the same reusable workflow once per
-**registered** `lib/<Name>`, passing the path through the `subdir` input:
+TagBot is a **thin caller** of the reusable `monorepo-tagbot.yml@v1`. Keep the
+caller permissions shown below because a reusable workflow cannot elevate its
+caller's token. Do **not** inline matrices, the `if`-guard, or
+`JuliaRegistries/TagBot@v1` steps. The reusable workflow resolves the General
+registry pull request from a JuliaTagBot comment, validates its package name
+against the root and `lib/*/Project.toml`, and calls TagBot only for that
+package. Retry comments without a General pull-request URL and manual runs
+without `package` fall back to a serialized full audit.
 
 ```yaml
 # .github/workflows/TagBot.yml
@@ -658,32 +656,34 @@ on:
     types: [created]
   workflow_dispatch:
     inputs:
-      lookback:
-        default: "3"
+      package:
+        description: "Package name to tag; empty audits every package"
+        required: false
+        type: string
+permissions:
+  actions: read
+  checks: read
+  contents: write
+  deployments: read
+  issues: read
+  discussions: read
+  packages: read
+  pages: read
+  pull-requests: read
+  repository-projects: read
+  security-events: read
+  statuses: read
 jobs:
   tagbot:
-    uses: "SciML/.github/.github/workflows/tagbot.yml@v1"
-    secrets: "inherit"
-
-  tagbot-subpackages:
-    strategy:
-      fail-fast: false
-      matrix:
-        package:
-          - OrdinaryDiffEqCore
-          - OrdinaryDiffEqBDF
-          # ... every registered lib/<Name>
-    uses: "SciML/.github/.github/workflows/tagbot.yml@v1"
+    uses: "SciML/.github/.github/workflows/monorepo-tagbot.yml@v1"
     with:
-      subdir: "lib/${{ matrix.package }}"
+      package: "${{ inputs.package }}"
     secrets: "inherit"
 ```
 
-A **single-package** repo has only the first job (the `tagbot` caller with
-`secrets: "inherit"`, no `subdir`); there is no subpackages matrix. The whole
-fleet, OrdinaryDiffEq included, is being converted from the previous inlined
-form (per-package `JuliaRegistries/TagBot@v1` steps) to this thin-caller form.
-See the [README `tagbot.yml`](README.md#tagbotyml) entry for the input table.
+A **single-package** repo calls `tagbot.yml@v1` directly. The monorepo resolver
+is unnecessary when there is only one package to scan. See the
+[README TagBot entries](README.md#tagbotyml) for both input tables.
 
 ### `DependabotAutoMerge.yml` → `dependabot-automerge.yml@v1`
 
@@ -809,8 +809,8 @@ should use **Runic**; only these two legacy repos are on JuliaFormatter.
       auto-populated), `CI` (group-dispatched), `Downgrade`
       (`julia-version: "lts"`, auto-`skip`), `Documentation`, `Downstream`,
       `FormatCheck`/`RunicSuggestions`, `SpellCheck`, `TagBot` (thin caller of
-      `tagbot.yml@v1`: root `tagbot` job + `tagbot-subpackages` matrix with
-      `subdir: lib/<pkg>`; single-package repos have only the root job),
+      `monorepo-tagbot.yml@v1` for targeted monorepo routing; single-package
+      repos call `tagbot.yml@v1` directly),
       `DependabotAutoMerge`, `DocPreviewCleanup`, `benchmark`.
 - [ ] Repo files: `.codecov.yml` (`comment: false`), `.typos.toml`,
       `.gitignore`, per-package `LICENSE.md`.

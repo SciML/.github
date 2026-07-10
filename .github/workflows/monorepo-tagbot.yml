@@ -1,0 +1,55 @@
+name: "Reusable Monorepo TagBot Workflow"
+
+on:
+  workflow_call:
+    inputs:
+      package:
+        description: "Package name for a manual targeted run; empty runs a full audit. Ignored for JuliaTagBot registry notifications."
+        default: ""
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  checks: read
+  contents: write
+  deployments: read
+  issues: read
+  discussions: read
+  packages: read
+  pages: read
+  pull-requests: read
+  repository-projects: read
+  security-events: read
+  statuses: read
+
+jobs:
+  resolve:
+    if: github.event_name == 'workflow_dispatch' || github.actor == 'JuliaTagBot'
+    runs-on: ubuntu-latest
+    outputs:
+      subdirs: "${{ steps.target.outputs.subdirs }}"
+    steps:
+      - uses: actions/checkout@v7
+      - id: target
+        uses: SciML/.github/.github/actions/resolve-monorepo-tagbot@v1
+        with:
+          token: "${{ secrets.GITHUB_TOKEN }}"
+          package: "${{ github.event_name == 'workflow_dispatch' && inputs.package || '' }}"
+          comment-body: "${{ github.event.comment.body }}"
+
+  tagbot:
+    needs: resolve
+    if: needs.resolve.outputs.subdirs != '' && needs.resolve.outputs.subdirs != '[]'
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        subdir: "${{ fromJSON(needs.resolve.outputs.subdirs) }}"
+    concurrency:
+      group: "tagbot-${{ github.repository }}-${{ matrix.subdir != '' && matrix.subdir || 'root' }}"
+      cancel-in-progress: false
+    uses: SciML/.github/.github/workflows/tagbot.yml@v1
+    with:
+      subdir: "${{ matrix.subdir }}"
+    secrets: inherit

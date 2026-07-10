@@ -2,9 +2,8 @@ name: "Reusable TagBot Workflow"
 
 # Creates GitHub releases/tags when a package is registered, via
 # JuliaRegistries/TagBot. Tags one package: the root, or a monorepo
-# sublibrary when `subdir` is set. The caller keeps the issue_comment /
-# workflow_dispatch triggers (TagBot is driven by the registrator comment);
-# a monorepo caller matrixes over its lib/* and calls this once per subdir.
+# sublibrary when `subdir` is set. Single-package repos call this workflow
+# directly; monorepos use monorepo-tagbot.yml to route each registry notification.
 
 on:
   workflow_call:
@@ -15,7 +14,7 @@ on:
         required: false
         type: string
       lookback:
-        description: "TagBot lookback window in days (used on manual workflow_dispatch runs)."
+        description: "Deprecated and ignored; retained for v1 caller compatibility."
         default: "3"
         required: false
         type: string
@@ -45,4 +44,3 @@ jobs:
           token: "${{ secrets.GITHUB_TOKEN }}"
           ssh: "${{ secrets.DOCUMENTER_KEY }}"
           subdir: "${{ inputs.subdir }}"
-          lookback: "${{ inputs.lookback }}"

@@ -334,11 +334,13 @@ and reports results on PRs. Input: `julia-version` (`"1"`).
 Creates GitHub releases/tags when a package is registered, via
 [JuliaRegistries/TagBot](https://github.com/JuliaRegistries/TagBot). Tags one
 package — the repository root, or a package at `subdir`. The
-if-guard (`workflow_dispatch` or `JuliaTagBot` actor) and the permissions block
-live in the reusable workflow; the caller keeps the `issue_comment` /
-`workflow_dispatch` triggers. `token` and `ssh` (`DOCUMENTER_KEY`) come from
-`secrets: inherit`. Monorepos should use [`monorepo-tagbot.yml`](#monorepo-tagbotyml)
-instead of calling this workflow once per package.
+if-guard (`workflow_dispatch` or `JuliaTagBot` actor) lives in the reusable
+workflow; the caller keeps the `issue_comment` / `workflow_dispatch` triggers
+and grants the token permissions shown below. A called workflow cannot elevate
+the caller's token permissions. `token` and `ssh` (`DOCUMENTER_KEY`) come from
+`secrets: inherit`. Monorepos should use
+[`monorepo-tagbot.yml`](#monorepo-tagbotyml) instead of calling this workflow
+once per package.
 
 | Input | Type | Default | Description |
 |---|---|---|---|
@@ -352,6 +354,19 @@ on:
   issue_comment:
     types: [created]
   workflow_dispatch:
+permissions:
+  actions: read
+  checks: read
+  contents: write
+  deployments: read
+  issues: read
+  discussions: read
+  packages: read
+  pages: read
+  pull-requests: read
+  repository-projects: read
+  security-events: read
+  statuses: read
 jobs:
   tagbot:
     uses: "SciML/.github/.github/workflows/tagbot.yml@v1"
@@ -386,6 +401,19 @@ on:
         description: "Package name to tag; empty audits every package"
         required: false
         type: string
+permissions:
+  actions: read
+  checks: read
+  contents: write
+  deployments: read
+  issues: read
+  discussions: read
+  packages: read
+  pages: read
+  pull-requests: read
+  repository-projects: read
+  security-events: read
+  statuses: read
 jobs:
   tagbot:
     uses: "SciML/.github/.github/workflows/monorepo-tagbot.yml@v1"

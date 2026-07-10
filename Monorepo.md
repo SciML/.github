@@ -639,13 +639,14 @@ jobs:
 
 ### `TagBot.yml` → targeted `monorepo-tagbot.yml@v1` caller
 
-TagBot is a **thin caller** of the reusable `monorepo-tagbot.yml@v1`. Do **not**
-inline `permissions`, matrices, the `if`-guard, or `JuliaRegistries/TagBot@v1`
-steps. The reusable workflow resolves the General registry pull request from a
-JuliaTagBot comment, validates its package name against the root and
-`lib/*/Project.toml`, and calls TagBot only for that package. Retry comments
-without a General pull-request URL and manual runs without `package` fall back
-to a serialized full audit.
+TagBot is a **thin caller** of the reusable `monorepo-tagbot.yml@v1`. Keep the
+caller permissions shown below because a reusable workflow cannot elevate its
+caller's token. Do **not** inline matrices, the `if`-guard, or
+`JuliaRegistries/TagBot@v1` steps. The reusable workflow resolves the General
+registry pull request from a JuliaTagBot comment, validates its package name
+against the root and `lib/*/Project.toml`, and calls TagBot only for that
+package. Retry comments without a General pull-request URL and manual runs
+without `package` fall back to a serialized full audit.
 
 ```yaml
 # .github/workflows/TagBot.yml
@@ -659,6 +660,19 @@ on:
         description: "Package name to tag; empty audits every package"
         required: false
         type: string
+permissions:
+  actions: read
+  checks: read
+  contents: write
+  deployments: read
+  issues: read
+  discussions: read
+  packages: read
+  pages: read
+  pull-requests: read
+  repository-projects: read
+  security-events: read
+  statuses: read
 jobs:
   tagbot:
     uses: "SciML/.github/.github/workflows/monorepo-tagbot.yml@v1"

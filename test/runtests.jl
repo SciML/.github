@@ -4,6 +4,10 @@ using Test
 const SCRIPT = joinpath(@__DIR__, "..", "scripts", "compute_affected_sublibraries.jl")
 include(SCRIPT)
 
+# Load the [sources] develop helper's pure collection functions.
+const DEVELOP_SCRIPT = joinpath(@__DIR__, "..", "scripts", "develop_sources.jl")
+include(DEVELOP_SCRIPT)
+
 # Build a fixture monorepo `lib/` tree in a temp dir.
 #   A  (base, no internal deps)
 #   B  deps A
@@ -21,13 +25,71 @@ function make_fixture(; c_groups::Union{Nothing, String} = nothing)
         write(joinpath(d, "Project.toml"), "name = \"$name\"\nuuid = \"00000000-0000-0000-0000-0000000000$(lpad(hash(name) % 100, 2, '0'))\"\n$depblock")
         write(joinpath(d, "src", "$name.jl"), "module $name\nend\n")
         write(joinpath(d, "test", "runtests.jl"), "using Test\n")
-        groups === nothing || write(joinpath(d, "test", "test_groups.toml"), groups)
+        return groups === nothing || write(joinpath(d, "test", "test_groups.toml"), groups)
     end
     pkg("A", String[])
     pkg("B", ["A"])
     pkg("C", ["B"]; groups = c_groups)
     pkg("D", String[])
     return root
+end
+
+@testset "develop_sources: path and URL source collection" begin
+    root = mktempdir()
+    localdep = joinpath(root, "lib", "LocalDep")
+    nested = joinpath(root, "lib", "NestedRuntime")
+    mkpath(localdep)
+    mkpath(nested)
+    write(
+        joinpath(root, "Project.toml"), """
+        name = "Root"
+        uuid = "00000000-0000-0000-0000-000000000001"
+
+        [deps]
+        LocalDep = "00000000-0000-0000-0000-000000000002"
+        UrlDep = "00000000-0000-0000-0000-000000000003"
+
+        [extras]
+        TestOnlyUrl = "00000000-0000-0000-0000-000000000004"
+
+        [sources]
+        LocalDep = {path = "lib/LocalDep"}
+        UrlDep = {url = "https://example.com/runtime.git", rev = "main"}
+        TestOnlyUrl = {url = "https://example.com/test-only.git"}
+        """
+    )
+    write(
+        joinpath(localdep, "Project.toml"), """
+        name = "LocalDep"
+        uuid = "00000000-0000-0000-0000-000000000002"
+
+        [deps]
+        NestedRuntime = "00000000-0000-0000-0000-000000000005"
+
+        [extras]
+        NestedTestOnly = "00000000-0000-0000-0000-000000000006"
+
+        [sources]
+        NestedRuntime = {path = "../NestedRuntime"}
+        NestedTestOnly = {url = "https://example.com/nested-test-only.git"}
+        """
+    )
+    write(
+        joinpath(nested, "Project.toml"), """
+        name = "NestedRuntime"
+        uuid = "00000000-0000-0000-0000-000000000005"
+        """
+    )
+
+    paths = collect_source_paths(root)
+    @test paths == [normpath(localdep), normpath(nested)]
+
+    specs = collect_source_specs(root)
+    @test Set(filter(!isnothing, getfield.(specs, :path))) == Set(paths)
+    url_specs = filter(s -> !isnothing(s.url), specs)
+    @test any(s -> s.name == "UrlDep" && s.url == "https://example.com/runtime.git" && s.rev == "main", url_specs)
+    @test any(s -> s.name == "TestOnlyUrl" && s.url == "https://example.com/test-only.git", url_specs)
+    @test !any(s -> s.name == "NestedTestOnly", url_specs)
 end
 
 @testset "compute_affected_sublibraries" begin
@@ -85,7 +147,7 @@ end
         # A is directly changed: default Core on lts,1,pre + QA on 1 (QA defaults to v1 only)
         a = filter(e -> e.project == "lib/A", m)
         @test Set((e.group, e.version) for e in a) ==
-              Set([("Core", "lts"), ("Core", "1"), ("Core", "pre"), ("QA", "1")])
+            Set([("Core", "lts"), ("Core", "1"), ("Core", "pre"), ("QA", "1")])
         # B and C are downstream: version "1" only
         for p in ("lib/B", "lib/C")
             ds = filter(e -> e.project == p, m)
@@ -175,7 +237,7 @@ end
     d = mktempdir()
     # No test/test_groups.toml -> single Core group on the standard set.
     @test Set((e.group, e.version) for e in build_root_matrix(d)) ==
-          Set([("Core", "lts"), ("Core", "1"), ("Core", "pre")])
+        Set([("Core", "lts"), ("Core", "1"), ("Core", "pre")])
     @test all(e -> e.continue_on_error == false, build_root_matrix(d))
     # The default matrix runner is self-hosted-capable `ubuntu-latest` (the
     # SciML demeter*/arctic* pool answers that label). Only legs that set
@@ -242,7 +304,7 @@ end
     core = filter(e -> e.group == "Core", m)
     @test length(core) == 6
     @test Set((e.version, e.runner) for e in core) ==
-          Set((v, o) for v in ["lts", "1"] for o in ["ubuntu-latest", "windows-latest", "macos-latest"])
+        Set((v, o) for v in ["lts", "1"] for o in ["ubuntu-latest", "windows-latest", "macos-latest"])
     # QA: no os -> single default ubuntu runner.
     qa = filter(e -> e.group == "QA", m)
     @test length(qa) == 1 && only(qa).runner == "ubuntu-latest"
@@ -344,7 +406,7 @@ end
         # GPU / explicit self-hosted runner override is preserved, NOT forced to
         # ubuntu-24.04.
         @test resolve(apt = "", container = "", default = ["self-hosted", "Linux", "X64", "gpu"]) ==
-              ["self-hosted", "Linux", "X64", "gpu"]
+            ["self-hosted", "Linux", "X64", "gpu"]
     end
 end
 

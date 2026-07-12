@@ -475,6 +475,22 @@ end
     end
 end
 
+# A 32-bit (x86/i686) Julia leg needs the i386 loader + C/C++ runtime installed
+# BEFORE setup-julia runs julia, or the run dies with `spawn .../x86/bin/julia
+# ENOENT`. Assert tests.yml has that install step, gates it on a 32-bit arch on
+# Linux, and orders it ahead of the Setup Julia step.
+@testset "tests.yml installs i386 runtime libs before setup-julia for 32-bit legs" begin
+    txt = read(joinpath(@__DIR__, "..", ".github", "workflows", "tests.yml"), String)
+    @test occursin("libc6:i386", txt)
+    @test occursin("dpkg --add-architecture i386", txt)
+    @test occursin("inputs.julia-arch == 'x86'", txt)
+    @test occursin("runner.os == 'Linux'", txt)
+    # Order: the i386 install must come before the setup-julia invocation.
+    i386_at = findfirst("libc6:i386", txt)
+    setup_at = findfirst("julia-actions/setup-julia", txt)
+    @test i386_at !== nothing && setup_at !== nothing && first(i386_at) < first(setup_at)
+end
+
 # develop_sources.jl: the [sources] develop helper used by tests.yml on Julia
 # <1.11. The pure path-collection (collect_source_paths) is tested here without
 # mutating any environment.

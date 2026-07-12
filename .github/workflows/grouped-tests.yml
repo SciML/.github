@@ -104,13 +104,14 @@ jobs:
       fail-fast: false
       matrix:
         include: ${{ fromJson(needs.detect.outputs.matrix) }}
-    name: "${{ matrix.group }} (julia ${{ matrix.version }}, ${{ join(matrix.runner, ' ') }})"
+    name: "${{ matrix.group }} (julia ${{ matrix.version }}, ${{ join(matrix.runner, ' ') }}${{ matrix.arch != '' && format(', {0}', matrix.arch) || '' }})"
     uses: "SciML/.github/.github/workflows/tests.yml@v1"
     with:
       project: "."
       group: "${{ matrix.group }}"
       group-env-name: "${{ inputs.group-env-name }}"
       julia-version: "${{ matrix.version }}"
+      julia-arch: "${{ matrix.arch }}"
       runner: ${{ toJson(matrix.runner) }}
       timeout-minutes: ${{ matrix.timeout }}
       num-threads: "${{ matrix.num_threads }}"

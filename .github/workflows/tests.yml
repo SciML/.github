@@ -129,6 +129,18 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: "Install 32-bit runtime libraries (i386)"
+        # A 32-bit (i686) Julia cannot exec on the 64-bit Linux runners without
+        # the i386 dynamic loader and C/C++ runtime. setup-julia invokes julia
+        # during its own step, so these must be installed BEFORE it — otherwise
+        # the run fails with `spawn .../x86/bin/julia ENOENT` (missing loader).
+        if: "${{ (inputs.julia-arch == 'x86' || inputs.julia-arch == 'i686') && runner.os == 'Linux' }}"
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libc6:i386 libstdc++6:i386 libgcc-s1:i386 libatomic1:i386
+
       - name: "Setup Julia ${{ inputs.julia-version }}"
         uses: julia-actions/setup-julia@v3
         with:

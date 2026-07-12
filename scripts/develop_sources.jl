@@ -1,13 +1,13 @@
 #!/usr/bin/env julia
 #
-# Develop the in-repo [sources] path deps of a sub-project.
+# Develop the [sources] deps of a sub-project.
 #
 # On Julia < 1.11 the [sources] table is ignored when an environment is
 # resolved/built/tested, so a monorepo sublibrary (e.g. lib/<name>) that relies
 # on [sources] to pin its in-repo siblings would otherwise resolve them as
 # registered packages. This script restores the 1.11+ behavior on 1.10 (the
-# SciML LTS) by Pkg.develop-ing each in-repo `path =` source by path. On Julia
-# >= 1.11 it is a no-op (the table is honored natively).
+# SciML LTS) by Pkg.develop-ing each `path =` or `url =` source. On Julia >=
+# 1.11 it is a no-op (the table is honored natively).
 #
 # The walk is transitive: a developed source dep can itself declare further
 # *runtime* [sources] that must also be developed for the environment to load.
@@ -25,9 +25,9 @@
 #   include("scripts/develop_sources.jl")
 #   develop_sources(project_dir)
 #
-# `develop_sources` activates `project_dir`, computes the source paths to
-# develop via `collect_source_paths`, and Pkg.develop-s them. The pure
-# path-collection logic is split out so it can be unit-tested without mutating
+# `develop_sources` activates `project_dir`, computes the source specs to
+# develop via `collect_source_specs`, and Pkg.develop-s them. The pure
+# source-collection logic is split out so it can be unit-tested without mutating
 # any environment.
 
 using Pkg
@@ -47,9 +47,40 @@ sources are left to `Pkg`. Visiting each resolved path once handles cycles and
 diamonds in the graph. This function is version-independent and mutates nothing.
 """
 function collect_source_paths(proj::AbstractString)
+    return first(_collect_source_paths_and_specs(proj))
+end
+
+"""
+    collect_source_specs(proj) -> Vector{Pkg.PackageSpec}
+
+Walk the `[sources]` graph rooted at `proj` and return the ordered
+`Pkg.PackageSpec`s to develop on Julia versions that do not natively honor
+`[sources]`. Unlike `collect_source_paths`, this includes both local `path =`
+sources and git `url =` sources, preserving `rev` and `subdir` when present.
+"""
+function collect_source_specs(proj::AbstractString)
+    return last(_collect_source_paths_and_specs(proj))
+end
+
+function _source_url_key(dep::AbstractString, spec::AbstractDict)
+    url = String(spec["url"])
+    rev = String(get(spec, "rev", ""))
+    subdir = String(get(spec, "subdir", ""))
+    return "url:$dep:$url:$rev:$subdir"
+end
+
+function _source_url_spec(dep::AbstractString, spec::AbstractDict)
+    kwargs = Pair{Symbol, Any}[:name => dep, :url => String(spec["url"])]
+    haskey(spec, "rev") && push!(kwargs, :rev => String(spec["rev"]))
+    haskey(spec, "subdir") && push!(kwargs, :subdir => String(spec["subdir"]))
+    return Pkg.PackageSpec(; kwargs...)
+end
+
+function _collect_source_paths_and_specs(proj::AbstractString)
     projroot = normpath(abspath(proj))
     developed = Set{String}([projroot])  # never develop the active project
     paths = String[]
+    specs = Pkg.PackageSpec[]
     queue = String[projroot]
     while !isempty(queue)
         dir = popfirst!(queue)
@@ -65,29 +96,38 @@ function collect_source_paths(proj::AbstractString)
             # are not runtime deps -- those are the dep's test-only sources and
             # must not leak into the active environment.
             isroot || dep in runtimedeps || continue
-            spec isa AbstractDict && haskey(spec, "path") || continue
-            p = normpath(abspath(joinpath(dir, spec["path"])))
-            if isdir(p) && !(p in developed)
-                push!(developed, p)
-                push!(paths, p)
-                push!(queue, p)  # resolve this dep's own runtime [sources] too
+            spec isa AbstractDict || continue
+            if haskey(spec, "path")
+                p = normpath(abspath(joinpath(dir, spec["path"])))
+                if isdir(p) && !(p in developed)
+                    push!(developed, p)
+                    push!(paths, p)
+                    push!(specs, Pkg.PackageSpec(path = p))
+                    push!(queue, p)  # resolve this dep's own runtime [sources] too
+                end
+            elseif haskey(spec, "url")
+                key = _source_url_key(dep, spec)
+                if !(key in developed)
+                    push!(developed, key)
+                    push!(specs, _source_url_spec(dep, spec))
+                end
             end
         end
     end
-    return paths
+    return paths, specs
 end
 
 """
     develop_sources(proj)
 
-Activate `proj` and, on Julia < 1.11, `Pkg.develop` its in-repo `[sources]`
-path deps (see `collect_source_paths`). No-op on Julia >= 1.11.
+Activate `proj` and, on Julia < 1.11, `Pkg.develop` its `[sources]` deps
+(see `collect_source_specs`). No-op on Julia >= 1.11.
 """
 function develop_sources(proj::AbstractString)
     Pkg.activate(proj)
     VERSION < v"1.11.0-DEV.0" || return nothing
-    paths = collect_source_paths(proj)
-    isempty(paths) || Pkg.develop([Pkg.PackageSpec(path = p) for p in paths])
+    specs = collect_source_specs(proj)
+    isempty(specs) || Pkg.develop(specs)
     return nothing
 end
 

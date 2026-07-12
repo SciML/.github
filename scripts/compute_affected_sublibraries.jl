@@ -29,6 +29,17 @@
 #                 group runs once per OS, e.g. ["ubuntu-latest","windows-latest",
 #                 "macos-latest"]). Empty -> use `runner`. Don't combine with a
 #                 custom `runner`; if both set, the OS axis wins.
+#   arch        — string or array of Julia CPU architectures (root matrix only;
+#                 the group runs once per arch, e.g. ["x64","x86"] to add a
+#                 32-bit lane). Empty -> the runner's native arch. Forwarded to
+#                 tests.yml's `julia-arch`, so a section like `arch = ["x86"]`
+#                 with `os = ["ubuntu-latest"]` yields a single 32-bit cell.
+#   group       — string; the GROUP env value dispatched to the package's
+#                 runtests.jl for this section, defaulting to the section name.
+#                 Lets a section named e.g. "Core 32-bit" run the "Core" body
+#                 (so its group folder / core file resolves) while carrying its
+#                 own distinct arch/os axis and its own CI job name. Root matrix
+#                 only.
 #   timeout     — integer, job timeout in minutes (default: 120)
 #   num_threads — integer, JULIA_NUM_THREADS (default: 1)
 #   local_only  — boolean (default: false). When true, the group is skipped
@@ -67,7 +78,7 @@
 #
 # With the --root-matrix flag the output is the ROOT package's group matrix,
 # read from <repo>/test/test_groups.toml (NOT under lib/), as a JSON array of
-# {group, version, runner, timeout, num_threads, continue_on_error}. This is not
+# {group, version, runner, arch, timeout, num_threads, continue_on_error}. This is not
 # diff-filtered (the root package runs all its groups every push/PR) and needs
 # no lib/ directory, so ordinary single packages can use it too. When no
 # test/test_groups.toml exists the default is a single "Core" group on
@@ -152,6 +163,8 @@ struct TestGroupConfig
     local_only::Bool
     continue_on_error::Bool
     os::Vector{String}  # root matrix only: OS axis (group runs once per os); empty = use `runner`
+    arch::Vector{String}  # root matrix only: arch axis (group runs once per arch); empty = runner's native arch
+    dispatch_group::String  # root matrix only: GROUP env dispatched to runtests; empty = section name
 end
 
 function parse_test_group(config::AbstractDict)
@@ -163,7 +176,12 @@ function parse_test_group(config::AbstractDict)
     local_only = Bool(get(config, "local_only", false))
     continue_on_error = Bool(get(config, "continue_on_error", false))
     os = convert(Vector{String}, get(config, "os", String[]))
-    return TestGroupConfig(versions, runner, timeout, num_threads, local_only, continue_on_error, os)
+    arch_raw = get(config, "arch", String[])
+    arch = arch_raw isa Vector ? convert(Vector{String}, arch_raw) : String[String(arch_raw)]
+    dispatch_group = String(get(config, "group", ""))
+    return TestGroupConfig(
+        versions, runner, timeout, num_threads, local_only, continue_on_error, os, arch, dispatch_group,
+    )
 end
 
 function load_test_groups(lib_dir::String, pkg::String)
@@ -173,7 +191,7 @@ function load_test_groups(lib_dir::String, pkg::String)
         return Dict{String, TestGroupConfig}(name => parse_test_group(config) for (name, config) in toml)
     end
     return Dict{String, TestGroupConfig}(
-        k => TestGroupConfig(v, "ubuntu-latest", 120, 1, false, false, String[]) for (k, v) in DEFAULT_TEST_GROUPS
+        k => TestGroupConfig(v, "ubuntu-latest", 120, 1, false, false, String[], String[], "") for (k, v) in DEFAULT_TEST_GROUPS
     )
 end
 
@@ -195,7 +213,7 @@ function load_root_test_groups(repo_root::String)
         isempty(groups) || return groups
     end
     return Dict{String, TestGroupConfig}(
-        k => TestGroupConfig(v, "ubuntu-latest", 120, 1, false, false, String[]) for (k, v) in DEFAULT_ROOT_GROUPS
+        k => TestGroupConfig(v, "ubuntu-latest", 120, 1, false, false, String[], String[], "") for (k, v) in DEFAULT_ROOT_GROUPS
     )
 end
 
@@ -381,18 +399,25 @@ function build_root_matrix(repo_root::String)
     entries = []
     for group_name in sort!(collect(keys(groups)))
         config = groups[group_name]
+        dispatch = isempty(config.dispatch_group) ? group_name : config.dispatch_group
         runners = isempty(config.os) ? Any[config.runner] : Any[o for o in config.os]
+        # Empty arch = one cell on the runner's native arch (emitted as "", which
+        # tests.yml falls back from to runner.arch). A non-empty list adds a cell
+        # per arch, e.g. ["x64", "x86"] for a 32-bit lane.
+        arches = isempty(config.arch) ? String[""] : config.arch
         vers = group_name == "QA" ? QA_VERSIONS : config.versions
         for ver in vers
             for runner in runners
-                push!(
-                    entries,
-                    (;
-                        group = group_name, version = ver, runner = runner,
-                        timeout = config.timeout, num_threads = config.num_threads,
-                        continue_on_error = config.continue_on_error,
+                for arch in arches
+                    push!(
+                        entries,
+                        (;
+                            group = dispatch, version = ver, runner = runner, arch = arch,
+                            timeout = config.timeout, num_threads = config.num_threads,
+                            continue_on_error = config.continue_on_error,
+                        )
                     )
-                )
+                end
             end
         end
     end
@@ -406,6 +431,7 @@ function print_root_matrix(entries)
         print("{\"group\":\"", entry.group, "\",\"version\":\"", entry.version, "\",\"runner\":")
         json_value(entry.runner)
         print(
+            ",\"arch\":\"", entry.arch, "\"",
             ",\"timeout\":", entry.timeout, ",\"num_threads\":", entry.num_threads,
             ",\"continue_on_error\":", entry.continue_on_error ? "true" : "false", "}",
         )

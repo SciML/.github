@@ -313,6 +313,71 @@ end
     @test length(gpu) == 1 && only(gpu).runner == ["self-hosted", "Linux", "X64", "gpu"]
 end
 
+@testset "root matrix: arch axis and group alias (32-bit lane)" begin
+    d = mktempdir()
+    mkpath(joinpath(d, "test"))
+    write(
+        joinpath(d, "test", "test_groups.toml"), """
+        [Core]
+        versions = ["lts", "1"]
+        os = ["ubuntu-latest", "windows-latest"]
+
+        ["Core 32-bit"]
+        group = "Core"
+        versions = ["1"]
+        os = ["ubuntu-latest"]
+        arch = "x86"
+
+        [QA]
+        versions = ["1"]
+        """
+    )
+    m = build_root_matrix(d)
+    # Native Core cells carry an empty arch (tests.yml falls back to runner.arch).
+    native = filter(e -> e.group == "Core" && e.arch == "", m)
+    @test length(native) == 4  # 2 versions × 2 OSes
+    @test Set((e.version, e.runner) for e in native) ==
+        Set((v, o) for v in ["lts", "1"] for o in ["ubuntu-latest", "windows-latest"])
+    # The aliased "Core 32-bit" section dispatches GROUP=Core but adds exactly one
+    # x86 cell on ubuntu, so runtests.jl's folder resolves to the Core body.
+    x86 = filter(e -> e.arch == "x86", m)
+    @test length(x86) == 1
+    @test only(x86).group == "Core" && only(x86).version == "1" && only(x86).runner == "ubuntu-latest"
+    # QA stays native.
+    @test all(e -> e.arch == "", filter(e -> e.group == "QA", m))
+end
+
+@testset "root matrix: arch as a list fans out per arch" begin
+    d = mktempdir()
+    mkpath(joinpath(d, "test"))
+    write(
+        joinpath(d, "test", "test_groups.toml"), """
+        [Core]
+        versions = ["1"]
+        arch = ["x64", "x86"]
+        """
+    )
+    m = build_root_matrix(d)
+    @test Set(e.arch for e in m) == Set(["x64", "x86"])
+    @test length(m) == 2
+end
+
+@testset "root matrix: --root-matrix CLI emits arch field" begin
+    d = mktempdir()
+    mkpath(joinpath(d, "test"))
+    write(
+        joinpath(d, "test", "test_groups.toml"), """
+        ["Core 32-bit"]
+        group = "Core"
+        versions = ["1"]
+        arch = "x86"
+        """
+    )
+    out = read(pipeline(IOBuffer(""), `$(Base.julia_cmd()) $SCRIPT $d --root-matrix`), String)
+    @test occursin("\"arch\":\"x86\"", out)
+    @test occursin("\"group\":\"Core\"", out)
+end
+
 @testset "root matrix faithfully reproduces OrdinaryDiffEq's embedded matrix" begin
     # ODE's root CI.yml is 17 groups × [lts,1,pre] minus excludes (AD->lts only,
     # ODEInterfaceRegression->lts only). QA is centrally clamped to v1 only (see

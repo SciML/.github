@@ -107,20 +107,9 @@ jobs:
             error("No downstream Project.toml at $downstream_project")
           Pkg.activate(downstream_project)
           @info "Selected downstream project" downstream_project
-          try
-            # force it to use this PR's version of the package
-            Pkg.develop(PackageSpec(path="."))  # resolver may fail with main deps
-            Pkg.update()
-            Pkg.test(coverage=${{ inputs.coverage }})  # resolver may fail with test time deps
-          catch err
-            err isa Pkg.Resolve.ResolverError || rethrow()
-
-            # If we can't resolve that means this is incompatible by SemVer and this is fine
-            # It means we marked this as a breaking change, so we don't need to worry about
-            # Mistakenly introducing a breaking change, as we have intentionally made one
-            @info "Not compatible with this release. No problem." exception=err
-            exit(0)  # Exit immediately, as a success
-          end
+          Pkg.develop(PackageSpec(path="."))
+          Pkg.update()
+          Pkg.test(coverage=${{ inputs.coverage }})
 
       - uses: julia-actions/julia-processcoverage@v1
 

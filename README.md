@@ -195,6 +195,7 @@ catching breakage you'd otherwise only find after release.
 | Input | Type | Default | Description |
 |---|---|---|---|
 | `repo` | string | — **(required)** | Downstream repo name (e.g. `OrdinaryDiffEq.jl`). |
+| `subdir` | string | `""` | Package path inside a monorepo (e.g. `lib/DiffEqBase`). |
 | `owner` | string | `"SciML"` | Owner of the downstream repo. |
 | `group` | string | `"All"` | Downstream test group. |
 | `julia-version` | string | `"1"` | Julia version. |
@@ -214,6 +215,19 @@ jobs:
     uses: "SciML/.github/.github/workflows/downstream.yml@v1"
     with:
       repo: "${{ matrix.repo }}"
+    secrets: "inherit"
+```
+
+For a package that lives in a monorepo, select the package project explicitly:
+
+```yaml
+jobs:
+  downstream-diffeqbase:
+    uses: "SciML/.github/.github/workflows/downstream.yml@v1"
+    with:
+      repo: "OrdinaryDiffEq.jl"
+      subdir: "lib/DiffEqBase"
+      group: "Core"
     secrets: "inherit"
 ```
 

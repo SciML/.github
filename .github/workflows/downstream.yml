@@ -21,6 +21,11 @@ on:
         description: "The name of the downstream repository that needs to be tested"
         required: true
         type: string
+      subdir:
+        description: "Path to the downstream package within the repository"
+        default: ""
+        required: false
+        type: string
       group:
         description: "The 'GROUP' of tests that need to be run. This will requires an ENV `GROUP` to be (conditionally) defined within your package tests as well to selectively run groups of tests"
         default: "All"
@@ -94,8 +99,14 @@ jobs:
         shell: julia --color=yes --project=downstream {0}
         env:
           GROUP: ${{ inputs.group }}
+          DOWNSTREAM_SUBDIR: ${{ inputs.subdir }}
         run: |
           using Pkg
+          downstream_project = normpath(joinpath("downstream", ENV["DOWNSTREAM_SUBDIR"]))
+          isfile(joinpath(downstream_project, "Project.toml")) ||
+            error("No downstream Project.toml at $downstream_project")
+          Pkg.activate(downstream_project)
+          @info "Selected downstream project" downstream_project
           try
             # force it to use this PR's version of the package
             Pkg.develop(PackageSpec(path="."))  # resolver may fail with main deps

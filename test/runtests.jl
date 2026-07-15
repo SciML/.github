@@ -482,9 +482,13 @@ end
     @test occursin("joinpath(\"downstream\", ENV[\"DOWNSTREAM_SUBDIR\"])", txt)
     @test occursin("Pkg.activate(downstream_project)", txt)
     @test occursin("isfile(joinpath(downstream_project, \"Project.toml\"))", txt)
+    @test occursin("UPSTREAM_SUBDIRS: \${{ inputs.upstream-subdirs }}", txt)
+    @test occursin("split(ENV[\"UPSTREAM_SUBDIRS\"], ',')", txt)
+    @test occursin("isfile(joinpath(project, \"Project.toml\"))", txt)
+    @test occursin("Pkg.develop(map(project -> PackageSpec(path=project), upstream_projects))", txt)
 
     activate_at = findfirst("Pkg.activate(downstream_project)", txt)
-    develop_at = findfirst("Pkg.develop(PackageSpec(path=\".\"))", txt)
+    develop_at = findfirst("Pkg.develop(map(project -> PackageSpec(path=project), upstream_projects))", txt)
     test_at = findfirst("Pkg.test", txt)
     @test activate_at !== nothing && develop_at !== nothing && test_at !== nothing
     @test first(activate_at) < first(develop_at) < first(test_at)

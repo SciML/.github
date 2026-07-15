@@ -195,6 +195,8 @@ catching breakage you'd otherwise only find after release.
 | Input | Type | Default | Description |
 |---|---|---|---|
 | `repo` | string | — **(required)** | Downstream repo name (e.g. `OrdinaryDiffEq.jl`). |
+| `subdir` | string | `""` | Package path inside a monorepo (e.g. `lib/DiffEqBase`). |
+| `upstream-subdirs` | string | `"."` | Comma-separated package paths in the calling repository to develop. |
 | `owner` | string | `"SciML"` | Owner of the downstream repo. |
 | `group` | string | `"All"` | Downstream test group. |
 | `julia-version` | string | `"1"` | Julia version. |
@@ -214,6 +216,33 @@ jobs:
     uses: "SciML/.github/.github/workflows/downstream.yml@v1"
     with:
       repo: "${{ matrix.repo }}"
+    secrets: "inherit"
+```
+
+For a package that lives in a monorepo, select the package project explicitly:
+
+```yaml
+jobs:
+  downstream-diffeqbase:
+    uses: "SciML/.github/.github/workflows/downstream.yml@v1"
+    with:
+      repo: "OrdinaryDiffEq.jl"
+      subdir: "lib/DiffEqBase"
+      group: "Core"
+    secrets: "inherit"
+```
+
+When the calling repository is a monorepo and the downstream package consumes
+one or more of its sublibraries, select those upstream projects explicitly:
+
+```yaml
+jobs:
+  downstream-mtk:
+    uses: "SciML/.github/.github/workflows/downstream.yml@v1"
+    with:
+      repo: "ModelingToolkit.jl"
+      upstream-subdirs: "lib/BoundaryValueDiffEqMIRK,lib/BoundaryValueDiffEqAscher"
+      group: "All"
     secrets: "inherit"
 ```
 

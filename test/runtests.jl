@@ -475,6 +475,25 @@ end
     end
 end
 
+@testset "downstream.yml selects a monorepo package project" begin
+    txt = read(joinpath(@__DIR__, "..", ".github", "workflows", "downstream.yml"), String)
+    @test occursin("subdir:", txt)
+    @test occursin("DOWNSTREAM_SUBDIR: \${{ inputs.subdir }}", txt)
+    @test occursin("joinpath(\"downstream\", ENV[\"DOWNSTREAM_SUBDIR\"])", txt)
+    @test occursin("Pkg.activate(downstream_project)", txt)
+    @test occursin("isfile(joinpath(downstream_project, \"Project.toml\"))", txt)
+    @test occursin("UPSTREAM_SUBDIRS: \${{ inputs.upstream-subdirs }}", txt)
+    @test occursin("split(ENV[\"UPSTREAM_SUBDIRS\"], ',')", txt)
+    @test occursin("isfile(joinpath(project, \"Project.toml\"))", txt)
+    @test occursin("Pkg.develop(map(project -> PackageSpec(path=project), upstream_projects))", txt)
+
+    activate_at = findfirst("Pkg.activate(downstream_project)", txt)
+    develop_at = findfirst("Pkg.develop(map(project -> PackageSpec(path=project), upstream_projects))", txt)
+    test_at = findfirst("Pkg.test", txt)
+    @test activate_at !== nothing && develop_at !== nothing && test_at !== nothing
+    @test first(activate_at) < first(develop_at) < first(test_at)
+end
+
 # A 32-bit (x86/i686) Julia leg needs the i386 loader + C/C++ runtime installed
 # BEFORE setup-julia runs julia, or the run dies with `spawn .../x86/bin/julia
 # ENOENT`. Assert tests.yml has that install step, gates it on a 32-bit arch on

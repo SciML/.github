@@ -8,6 +8,8 @@ include(SCRIPT)
 const DEVELOP_SCRIPT = joinpath(@__DIR__, "..", "scripts", "develop_sources.jl")
 include(DEVELOP_SCRIPT)
 
+include(joinpath(@__DIR__, "reconcile_downgrade_sources.jl"))
+
 # Build a fixture monorepo `lib/` tree in a temp dir.
 #   A  (base, no internal deps)
 #   B  deps A

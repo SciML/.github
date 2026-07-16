@@ -47,6 +47,11 @@ on:
         default: ""
         required: false
         type: string
+      workflow-ref:
+        description: "Ref of SciML/.github to source the path-source reconciliation helper from"
+        default: "v1"
+        required: false
+        type: string
 
 jobs:
   discover:
@@ -103,6 +108,12 @@ jobs:
         project: ${{ fromJson(needs.discover.outputs.projects) }}
     steps:
       - uses: actions/checkout@v7
+      - name: "Checkout SciML/.github for the downgrade source helper"
+        uses: actions/checkout@v7
+        with:
+          repository: SciML/.github
+          ref: ${{ inputs.workflow-ref }}
+          path: .sciml-dotgithub
       - uses: julia-actions/setup-julia@v3
         with:
           version: ${{ inputs.julia-version }}
@@ -167,11 +178,24 @@ jobs:
           [ -n "${{ inputs.skip }}" ] && effective="$effective,${{ inputs.skip }}"
           echo "Effective downgrade skip: $effective"
           echo "EFFECTIVE_SKIP=$effective" >> "$GITHUB_ENV"
+      - name: "Expose path-source constraints to the minimum resolver"
+        run: >-
+          julia --startup-file=no
+          .sciml-dotgithub/scripts/reconcile_downgrade_sources.jl
+          prepare "${{ matrix.project }}"
+          "$RUNNER_TEMP/sublibrary-downgrade-project.toml"
       - uses: julia-actions/julia-downgrade-compat@v2
         with:
           projects: ${{ matrix.project }}
           skip: ${{ env.EFFECTIVE_SKIP }}
           julia_version: ${{ env.JULIA_MM }}
+      - name: "Restore the package project after minimum resolution"
+        if: always()
+        run: >-
+          julia --startup-file=no
+          .sciml-dotgithub/scripts/reconcile_downgrade_sources.jl
+          restore "${{ matrix.project }}"
+          "$RUNNER_TEMP/sublibrary-downgrade-project.toml"
       - name: "Install system packages"
         if: "${{ inputs.apt-packages != '' && runner.os == 'Linux' }}"
         run: |

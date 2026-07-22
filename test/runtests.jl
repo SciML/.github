@@ -1,4 +1,5 @@
 using Test
+using TOML
 
 # Load the detection script's functions without running main().
 const SCRIPT = joinpath(@__DIR__, "..", "scripts", "compute_affected_sublibraries.jl")
@@ -591,4 +592,231 @@ end
 @testset "develop_sources: no [sources] table -> nothing to develop" begin
     root = make_sources_fixture()
     @test isempty(collect_source_paths(joinpath(root, "Leaf")))
+end
+
+function embedded_promote_test_extras(path)
+    lines = readlines(path)
+    first_line = findfirst(line -> occursin("<<'JULIA'", line), lines)
+    first_line === nothing && error("no Julia heredoc in $path")
+    last_line = findnext(line -> strip(line) == "JULIA", lines, first_line + 1)
+    last_line === nothing && error("unterminated Julia heredoc in $path")
+    source = map(lines[(first_line + 1):(last_line - 1)]) do line
+        startswith(line, "          ") ? line[11:end] : line
+    end
+    return join(source, '\n') * '\n'
+end
+
+const PROMOTE_TEST_EXTRAS_SOURCE = embedded_promote_test_extras(
+    joinpath(@__DIR__, "..", ".github", "workflows", "downgrade.yml")
+)
+include_string(Main, PROMOTE_TEST_EXTRAS_SOURCE, "embedded promote_test_extras.jl")
+
+@testset "promote_test_extras production source stays synchronized" begin
+    workflows = ("downgrade.yml", "sublibrary-downgrade.yml")
+    for workflow in workflows
+        path = joinpath(@__DIR__, "..", ".github", "workflows", workflow)
+        text = read(path, String)
+        @test embedded_promote_test_extras(path) == PROMOTE_TEST_EXTRAS_SOURCE
+        @test occursin("cp -- \"\$project_file\" \"\$backup\"", text)
+        @test occursin("cp -- \"\$DOWNGRADE_PROJECT_BACKUP\" \"\$DOWNGRADE_PROJECT_FILE\"", text)
+        @test occursin(raw"if: ${{ always() }}", text)
+        resolve_at = findfirst("julia-actions/julia-downgrade-compat", text)
+        promote_at = findfirst("Keep resolved test extras reachable", text)
+        build_at = findfirst("julia-actions/julia-buildpkg", text)
+        test_at = findfirst("julia-actions/julia-runtest", text)
+        restore_at = findfirst("Restore the original project file", text)
+        @test all(!isnothing, (resolve_at, promote_at, build_at, test_at, restore_at))
+        @test first(resolve_at) < first(promote_at) < first(build_at) < first(test_at) <
+            first(restore_at)
+    end
+end
+
+@testset "promote_test_extras selects only resolved old-style test dependencies" begin
+    root = mktempdir()
+    project_path = joinpath(root, "Project.toml")
+    original = """
+    name = "PromotionFixture"
+    uuid = "00000000-0000-0000-0000-000000000001"
+
+    [deps]
+    Existing = "00000000-0000-0000-0000-000000000002"
+
+    [weakdeps]
+    PromotedWeak = "00000000-0000-0000-0000-000000000003"
+    UntargetedWeak = "00000000-0000-0000-0000-000000000004"
+
+    [extras]
+    PromotedPure = "00000000-0000-0000-0000-000000000005"
+    PromotedWeak = "00000000-0000-0000-0000-000000000003"
+    Excluded = "00000000-0000-0000-0000-000000000006"
+    SourceExtra = "00000000-0000-0000-0000-000000000007"
+    NotTargeted = "00000000-0000-0000-0000-000000000008"
+
+    [sources]
+    SourceExtra = {path = "../SourceExtra"}
+
+    [targets]
+    test = ["PromotedPure", "PromotedWeak", "Excluded", "SourceExtra"]
+    """
+    write(project_path, original)
+
+    promoted = promote_test_extras(root, ["Excluded"])
+    project = TOML.parsefile(project_path)
+    @test promoted == ["PromotedPure", "PromotedWeak"]
+    @test project["deps"]["PromotedPure"] == project["extras"]["PromotedPure"]
+    @test project["deps"]["PromotedWeak"] == project["extras"]["PromotedWeak"]
+    @test !haskey(project["deps"], "Excluded")
+    @test !haskey(project["deps"], "SourceExtra")
+    @test !haskey(project["deps"], "NotTargeted")
+    @test !haskey(project["weakdeps"], "PromotedWeak")
+    @test haskey(project["weakdeps"], "UntargetedWeak")
+    @test promote_test_extras(root, ["Excluded"]) == String[]
+end
+
+@testset "promote_test_extras keeps no-op projects byte-identical" begin
+    root = mktempdir()
+    project_path = joinpath(root, "JuliaProject.toml")
+    original = """
+    name = "NoPromotionFixture"
+    uuid = "00000000-0000-0000-0000-000000000010"
+
+    [extras]
+    NotTargeted = "00000000-0000-0000-0000-000000000011"
+
+    [targets]
+    test = []
+    """
+    write(project_path, original)
+    cd(root) do
+        @test promote_test_extras("@.") == String[]
+    end
+    @test read(project_path, String) == original
+end
+
+@testset "promote_test_extras leaves new-style test environments untouched" begin
+    root = mktempdir()
+    project = joinpath(root, "lib", "NewStyleFixture")
+    test_directory = joinpath(project, "test")
+    mkpath(test_directory)
+    root_project = """
+    name = "NewStyleFixture"
+    uuid = "00000000-0000-0000-0000-000000000012"
+
+    [deps]
+    RuntimeDep = "00000000-0000-0000-0000-000000000013"
+    """
+    test_project = """
+    [deps]
+    TestDep = "00000000-0000-0000-0000-000000000014"
+    """
+    write(joinpath(project, "Project.toml"), root_project)
+    write(joinpath(test_directory, "Project.toml"), test_project)
+
+    @test promote_test_extras(project) == String[]
+    @test read(joinpath(project, "Project.toml"), String) == root_project
+    @test read(joinpath(test_directory, "Project.toml"), String) == test_project
+end
+
+function with_project_backup(f, project_path, backup_path)
+    cp(project_path, backup_path; force = true)
+    try
+        return f()
+    finally
+        cp(backup_path, project_path; force = true)
+        rm(backup_path; force = true)
+    end
+end
+
+@testset "project backup restores exact bytes after success and failure" begin
+    for fail in (false, true)
+        root = mktempdir()
+        project_path = joinpath(root, "Project.toml")
+        backup_path = joinpath(root, "original.toml")
+        original = """
+        # This comment and ordering must survive cleanup exactly.
+        name = "RestoreFixture"
+        uuid = "00000000-0000-0000-0000-000000000015"
+
+        [extras]
+        TestDep = "00000000-0000-0000-0000-000000000016"
+
+        [targets]
+        test = ["TestDep"]
+        """
+        write(project_path, original)
+        operation = () -> with_project_backup(project_path, backup_path) do
+            @test promote_test_extras(root) == ["TestDep"]
+            @test read(project_path, String) != original
+            fail && error("restore failure-path fixture")
+        end
+        fail ? (@test_throws ErrorException operation()) : operation()
+        @test read(project_path, String) == original
+        @test !isfile(backup_path)
+    end
+end
+
+@testset "promoted test extras survive the Pkg.test sandbox" begin
+    root = mktempdir()
+    package = joinpath(root, "PromotionPkg")
+    dependency = joinpath(root, "FloorFixtureDep")
+    mkpath(joinpath(package, "src"))
+    mkpath(joinpath(package, "test"))
+    mkpath(joinpath(dependency, "src"))
+    write(
+        joinpath(package, "Project.toml"),
+        """
+        name = "PromotionPkg"
+        uuid = "00000000-0000-0000-0000-000000000020"
+        version = "0.1.0"
+
+        [extras]
+        FloorFixtureDep = "00000000-0000-0000-0000-000000000021"
+
+        [targets]
+        test = ["FloorFixtureDep"]
+
+        [compat]
+        FloorFixtureDep = "0.1, 0.2"
+        julia = "1.10"
+        """
+    )
+    manifest_path = joinpath(package, "Manifest.toml")
+    write(
+        manifest_path,
+        """
+        julia_version = "$(VERSION)"
+        manifest_format = "2.0"
+
+        [[deps.FloorFixtureDep]]
+        path = "../FloorFixtureDep"
+        uuid = "00000000-0000-0000-0000-000000000021"
+        version = "0.1.0"
+        """
+    )
+    write(joinpath(package, "src", "PromotionPkg.jl"), "module PromotionPkg\nend\n")
+    write(
+        joinpath(package, "test", "runtests.jl"),
+        "using FloorFixtureDep\n@assert FloorFixtureDep.VERSION_MARKER == v\"0.1.0\"\n"
+    )
+    write(
+        joinpath(dependency, "Project.toml"),
+        """
+        name = "FloorFixtureDep"
+        uuid = "00000000-0000-0000-0000-000000000021"
+        version = "0.1.0"
+        """
+    )
+    write(
+        joinpath(dependency, "src", "FloorFixtureDep.jl"),
+        "module FloorFixtureDep\nconst VERSION_MARKER = v\"0.1.0\"\nend\n"
+    )
+
+    @test promote_test_extras(package) == ["FloorFixtureDep"]
+    locked_manifest = read(manifest_path)
+    julia = joinpath(Sys.BINDIR, "julia" * (Sys.iswindows() ? ".exe" : ""))
+    command = `$julia --startup-file=no --project=$package -e 'using Pkg; Pkg.build(; verbose=true); Pkg.test(; allow_reresolve=false)'`
+    @test success(pipeline(command; stdout, stderr))
+    @test read(manifest_path) == locked_manifest
+    manifest = TOML.parsefile(manifest_path)
+    @test manifest["deps"]["FloorFixtureDep"][1]["version"] == "0.1.0"
 end

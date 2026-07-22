@@ -631,6 +631,21 @@ include_string(Main, PROMOTE_TEST_EXTRAS_SOURCE, "embedded promote_test_extras.j
     end
 end
 
+@testset "empty downgrade group preserves the package default" begin
+    path = joinpath(@__DIR__, "..", ".github", "workflows", "downgrade.yml")
+    text = read(path, String)
+    export_at = findfirst("Export requested test group", text)
+    test_at = findfirst("julia-actions/julia-runtest", text)
+    @test all(!isnothing, (export_at, test_at))
+    @test first(export_at) < first(test_at)
+    @test occursin(raw"if: \"${{ inputs.group != '' }}\"", text)
+    @test occursin(raw"REQUESTED_GROUP: \"${{ inputs.group }}\"", text)
+    @test occursin(raw"run: printf 'GROUP=%s\n' \"$REQUESTED_GROUP\" >> \"$GITHUB_ENV\"", text)
+    @test !any(
+        line -> strip(line) == raw"GROUP: \"${{ inputs.group }}\"", eachline(IOBuffer(text))
+    )
+end
+
 @testset "promote_test_extras selects only resolved old-style test dependencies" begin
     root = mktempdir()
     project_path = joinpath(root, "Project.toml")

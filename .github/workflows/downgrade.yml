@@ -238,6 +238,12 @@ jobs:
         with:
           project: "${{ inputs.project }}"
 
+      - name: "Export requested test group"
+        if: "${{ inputs.group != '' }}"
+        env:
+          REQUESTED_GROUP: "${{ inputs.group }}"
+        run: printf 'GROUP=%s\n' "$REQUESTED_GROUP" >> "$GITHUB_ENV"
+
       - uses: julia-actions/julia-runtest@v1
         with:
           project: "${{ inputs.project }}"
@@ -247,8 +253,6 @@ jobs:
           # and fails resolution (e.g. "empty intersection between X@min and project
           # compatibility latest"). Downgrade tests must keep the minimum versions.
           force_latest_compatible_version: false
-        env:
-          GROUP: "${{ inputs.group }}"
 
       - name: "Restore the original project file"
         if: ${{ always() }}

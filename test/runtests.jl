@@ -494,6 +494,13 @@ end
     @test first(activate_at) < first(develop_at) < first(test_at)
 end
 
+@testset "downstream.yml propagates resolver failures" begin
+    txt = read(joinpath(@__DIR__, "..", ".github", "workflows", "downstream.yml"), String)
+    @test !occursin("Pkg.Resolve.ResolverError", txt)
+    @test !occursin("Not compatible with this release", txt)
+    @test !occursin("exit(0)", txt)
+end
+
 # A 32-bit (x86/i686) Julia leg needs the i386 loader + C/C++ runtime installed
 # BEFORE setup-julia runs julia, or the run dies with `spawn .../x86/bin/julia
 # ENOENT`. Assert tests.yml has that install step, gates it on a 32-bit arch on

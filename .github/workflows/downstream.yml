@@ -113,28 +113,17 @@ jobs:
             error("No downstream Project.toml at $downstream_project")
           Pkg.activate(downstream_project)
           @info "Selected downstream project" downstream_project
-          try
-            # force it to use this PR's version of the package
-            upstream_projects = filter(!isempty, strip.(split(ENV["UPSTREAM_SUBDIRS"], ',')))
-            isempty(upstream_projects) && error("No upstream package projects selected")
-            upstream_projects = normpath.(upstream_projects)
-            for project in upstream_projects
-              isfile(joinpath(project, "Project.toml")) ||
-                error("No upstream Project.toml at $project")
-            end
-            @info "Selected upstream projects" upstream_projects
-            Pkg.develop(map(project -> PackageSpec(path=project), upstream_projects))
-            Pkg.update()
-            Pkg.test(coverage=${{ inputs.coverage }})  # resolver may fail with test time deps
-          catch err
-            err isa Pkg.Resolve.ResolverError || rethrow()
-
-            # If we can't resolve that means this is incompatible by SemVer and this is fine
-            # It means we marked this as a breaking change, so we don't need to worry about
-            # Mistakenly introducing a breaking change, as we have intentionally made one
-            @info "Not compatible with this release. No problem." exception=err
-            exit(0)  # Exit immediately, as a success
+          upstream_projects = filter(!isempty, strip.(split(ENV["UPSTREAM_SUBDIRS"], ',')))
+          isempty(upstream_projects) && error("No upstream package projects selected")
+          upstream_projects = normpath.(upstream_projects)
+          for project in upstream_projects
+            isfile(joinpath(project, "Project.toml")) ||
+              error("No upstream Project.toml at $project")
           end
+          @info "Selected upstream projects" upstream_projects
+          Pkg.develop(map(project -> PackageSpec(path=project), upstream_projects))
+          Pkg.update()
+          Pkg.test(coverage=${{ inputs.coverage }})
 
       - uses: julia-actions/julia-processcoverage@v1
 

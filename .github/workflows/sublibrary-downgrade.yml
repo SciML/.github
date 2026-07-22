@@ -172,6 +172,104 @@ jobs:
           projects: ${{ matrix.project }}
           skip: ${{ env.EFFECTIVE_SKIP }}
           julia_version: ${{ env.JULIA_MM }}
+      - name: "Keep resolved test extras reachable during build and test"
+        env:
+          DOWNGRADE_TEST_PROJECT: ${{ matrix.project }}
+          DOWNGRADE_NO_PROMOTE: ""
+        run: |
+          project_dir="$DOWNGRADE_TEST_PROJECT"
+          [ "$project_dir" = "@." ] && project_dir="."
+          case "$project_dir" in
+            @*) echo "Project must be a directory path or @.: $project_dir" >&2; exit 1 ;;
+          esac
+          project_file=""
+          for filename in Project.toml JuliaProject.toml; do
+            candidate="$project_dir/$filename"
+            if [ -f "$candidate" ]; then project_file="$candidate"; break; fi
+          done
+          [ -n "$project_file" ] || { echo "No Project.toml or JuliaProject.toml in $project_dir" >&2; exit 1; }
+          backup="$RUNNER_TEMP/sciml-downgrade-original-project.toml"
+          cp -- "$project_file" "$backup"
+          echo "DOWNGRADE_PROJECT_FILE=$project_file" >> "$GITHUB_ENV"
+          echo "DOWNGRADE_PROJECT_BACKUP=$backup" >> "$GITHUB_ENV"
+          julia --startup-file=no - "$DOWNGRADE_TEST_PROJECT" "$DOWNGRADE_NO_PROMOTE" <<'JULIA'
+          using TOML
+
+          function project_file(project::AbstractString)
+              directory = project == "@." ? "." : project
+              startswith(directory, "@") &&
+                  error("project must be a directory path or @., got: $project")
+              for filename in ("Project.toml", "JuliaProject.toml")
+                  candidate = joinpath(directory, filename)
+                  isfile(candidate) && return candidate
+              end
+              error("no Project.toml or JuliaProject.toml in $directory")
+          end
+
+          function write_project(path::AbstractString, project::AbstractDict)
+              temporary, io = mktemp(dirname(path))
+              try
+                  TOML.print(io, project)
+                  close(io)
+                  mv(temporary, path; force = true)
+              catch
+                  isopen(io) && close(io)
+                  ispath(temporary) && rm(temporary; force = true)
+                  rethrow()
+              end
+              return nothing
+          end
+
+          function promote_test_extras(project::AbstractString, no_promote = String[])
+              path = project_file(project)
+              parsed = TOML.parsefile(path)
+              extras = get(parsed, "extras", Dict{String, Any}())
+              targets = get(parsed, "targets", Dict{String, Any}())
+              test_target = get(targets, "test", String[])
+              test_target isa AbstractVector || error("[targets].test must be an array in $path")
+              excluded = Set(strip.(filter(!isempty, no_promote)))
+              sources = Set(keys(get(parsed, "sources", Dict{String, Any}())))
+              names = sort!(unique!(String.(test_target)))
+              deps = get(parsed, "deps", Dict{String, Any}())
+              for name in names
+                  if haskey(extras, name) && haskey(deps, name) && deps[name] != extras[name]
+                      error("$name has different UUIDs in [deps] and [extras] in $path")
+                  end
+              end
+              targeted_extras = filter(name -> haskey(extras, name), names)
+              skipped_no_promote = filter(name -> name ∈ excluded, targeted_extras)
+              skipped_sources = filter(name -> name ∈ sources, targeted_extras)
+              promoted = filter(names) do name
+                  haskey(extras, name) && !haskey(deps, name) &&
+                      name ∉ excluded && name ∉ sources
+              end
+              @info "Selected old-style test extras for the downgraded environment" project = path promoted skipped_no_promote skipped_sources
+              isempty(promoted) && return promoted
+
+              deps = get!(parsed, "deps", Dict{String, Any}())
+              weakdeps = get(parsed, "weakdeps", nothing)
+              for name in promoted
+                  uuid = extras[name]
+                  deps[name] = uuid
+                  weakdeps isa AbstractDict && delete!(weakdeps, name)
+              end
+              weakdeps isa AbstractDict && isempty(weakdeps) && delete!(parsed, "weakdeps")
+              write_project(path, parsed)
+              @info "Promoted resolved test extras into [deps]" project = path promoted
+              return promoted
+          end
+
+          function main(args)
+              length(args) == 2 || error("usage: promote_test_extras.jl PROJECT NO_PROMOTE")
+              no_promote = filter(!isempty, strip.(split(args[2], ',')))
+              promote_test_extras(args[1], no_promote)
+              return nothing
+          end
+
+          if PROGRAM_FILE == "-" || abspath(PROGRAM_FILE) == @__FILE__
+              main(ARGS)
+          end
+          JULIA
       - name: "Install system packages"
         if: "${{ inputs.apt-packages != '' && runner.os == 'Linux' }}"
         run: |
@@ -184,3 +282,10 @@ jobs:
         with:
           project: ${{ matrix.project }}
           allow_reresolve: false
+      - name: "Restore the original project file"
+        if: ${{ always() }}
+        run: |
+          if [ -n "${DOWNGRADE_PROJECT_BACKUP:-}" ] && [ -f "$DOWNGRADE_PROJECT_BACKUP" ]; then
+            cp -- "$DOWNGRADE_PROJECT_BACKUP" "$DOWNGRADE_PROJECT_FILE"
+            rm -- "$DOWNGRADE_PROJECT_BACKUP"
+          fi

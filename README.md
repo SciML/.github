@@ -259,6 +259,8 @@ to catch under-specified `[compat]` lower bounds.
 | `skip` | string | `""` | **Additional** deps to skip when downgrading, beyond the auto-included Julia stdlibs and any `[sources]` path/url deps (see note). |
 | `projects` | string | `"."` | Comma-separated project dirs to downgrade. |
 | `project` | string | `"@."` | `--project` for build/test (a workspace submodule or `lib/X`); default tests the repo root. |
+| `mode` | string | `"deps"` | Dependency set minimized by `julia-downgrade-compat`: `deps`, `alldeps`, `weakdeps`, or `forcedeps`. |
+| `no_promote` | string | `"Mooncake"` | Comma-separated old-style test extras left out of the joint floor resolve. |
 | `self-hosted` / `os` | | `false` / `ubuntu-latest` | Runner selection. |
 | `apt-packages` | string | `""` | Space-separated apt packages to install before building/testing (Linux only). |
 | `container` | string | `""` | Docker container image to run the job in (e.g. `cmhyett/julia-fenics:latest` for Python-stack packages). Empty = no container. |
@@ -281,6 +283,14 @@ jobs:
 > (Auto-skip and the `lts` default land via
 > [SciML/.github #73](https://github.com/SciML/.github/pull/73); strict
 > `allow_reresolve: false` is already in effect.)
+
+For old-style `[extras]` / `[targets].test` dependencies, the workflow
+temporarily adds each floor-resolved test extra to the active project's
+`[deps]` before build and test. This keeps `Pkg.test` from replacing an orphaned
+manifest floor with the newest compatible version. `[sources]` and
+`no_promote` entries are left untouched, new-style `test/Project.toml`
+environments keep their existing handling, and an `always()` cleanup restores
+the original project file byte-for-byte.
 
 ### `documentation.yml`
 
@@ -779,6 +789,12 @@ jobs:
 > (Auto-skip and the `lts` default land via
 > [SciML/.github #73](https://github.com/SciML/.github/pull/73); strict
 > `allow_reresolve: false` is already in effect.)
+
+Old-style `[extras]` / `[targets].test` dependencies are temporarily added to
+the sublibrary's `[deps]` after floor resolution so `Pkg.build` and `Pkg.test`
+retain those exact manifest versions. Source-backed extras are not rewritten,
+new-style `test/Project.toml` environments keep their existing handling, and
+an `always()` cleanup restores the original project file byte-for-byte.
 
 ---
 

@@ -511,6 +511,7 @@ end
     @test occursin("dpkg --add-architecture i386", txt)
     @test occursin("inputs.julia-arch == 'x86'", txt)
     @test occursin("runner.os == 'Linux'", txt)
+    @test occursin("runner.environment == 'github-hosted'", txt)
     # Order: the i386 install must come before the setup-julia invocation.
     i386_at = findfirst("libc6:i386", txt)
     setup_at = findfirst("julia-actions/setup-julia", txt)

@@ -122,7 +122,7 @@ jobs:
           echo "Effective downgrade skip: $effective"
           echo "EFFECTIVE_SKIP=$effective" >> "$GITHUB_ENV"
 
-      - uses: julia-actions/julia-downgrade-compat@v2
+      - uses: julia-actions/julia-downgrade-compat@v2.6.2
         with:
           skip: "${{ env.EFFECTIVE_SKIP }}"
           projects: "${{ inputs.projects }}"

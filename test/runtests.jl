@@ -600,3 +600,30 @@ end
     root = make_sources_fixture()
     @test isempty(collect_source_paths(joinpath(root, "Leaf")))
 end
+
+@testset "auto-precompile input is plumbed to JULIA_PKG_PRECOMPILE_AUTO" begin
+    wf(p) = read(joinpath(@__DIR__, "..", ".github", "workflows", p), String)
+
+    tests = wf("tests.yml")
+    # Declared as a boolean input, defaulting to Pkg's normal eager behavior.
+    @test occursin("auto-precompile:", tests)
+    # Job-level (not step-level) so buildpkg's instantiate/build is covered too.
+    precompile_at = findfirst("JULIA_PKG_PRECOMPILE_AUTO", tests)
+    steps_at = findfirst("\n    steps:", tests)
+    @test precompile_at !== nothing && steps_at !== nothing
+    @test first(precompile_at) < first(steps_at)
+    @test occursin("JULIA_PKG_PRECOMPILE_AUTO: \"\${{ inputs.auto-precompile && '1' || '0' }}\"", tests)
+
+    # Both fan-out workflows expose the input and forward it, or a caller has no
+    # way to set it: a job that `uses:` a reusable workflow may not carry `env:`.
+    for p in ("grouped-tests.yml", "sublibrary-project-tests.yml")
+        txt = wf(p)
+        @test occursin("auto-precompile:", txt)
+        @test occursin("auto-precompile: \${{ inputs.auto-precompile }}", txt)
+    end
+
+    # sublibrary-project-tests fans out over four shards; every one must forward
+    # it, otherwise the setting silently applies to only part of the matrix.
+    subs = wf("sublibrary-project-tests.yml")
+    @test count("auto-precompile: \${{ inputs.auto-precompile }}", subs) == 4
+end

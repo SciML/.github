@@ -106,6 +106,11 @@ on:
         default: false
         required: false
         type: boolean
+      auto-precompile:
+        description: "Value of JULIA_PKG_PRECOMPILE_AUTO for the whole job (true -> 1, false -> 0). Set false for packages whose dependency tree OOMs the runner during Pkg's eager parallel precompilation."
+        default: true
+        required: false
+        type: boolean
       dotgithub-ref:
         description: "Ref of SciML/.github to source the develop-sources helper script from"
         default: "v1"
@@ -126,6 +131,11 @@ jobs:
     runs-on: ${{ (inputs.apt-packages != '' || inputs.container != '') && fromJSON('["ubuntu-24.04"]') || (inputs.runner != '' && fromJson(inputs.runner) || (inputs.self-hosted && 'self-hosted' || inputs.os)) }}
     container: ${{ inputs.container }}
     timeout-minutes: ${{ inputs.timeout-minutes }}
+    env:
+      # Job-level so it covers buildpkg (instantiate/build) as well as the test
+      # run. A caller cannot set this at its own call site: a job that uses a
+      # reusable workflow may not carry an `env:` map, so it has to be an input.
+      JULIA_PKG_PRECOMPILE_AUTO: "${{ inputs.auto-precompile && '1' || '0' }}"
     steps:
       - uses: actions/checkout@v7
 

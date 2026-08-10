@@ -66,6 +66,11 @@ on:
         default: false
         required: false
         type: boolean
+      auto-precompile:
+        description: "Value of JULIA_PKG_PRECOMPILE_AUTO for each sublibrary test job (true -> 1, false -> 0). Set false for sublibraries whose dependency tree OOMs the runner during Pkg's eager parallel precompilation."
+        default: true
+        required: false
+        type: boolean
 
 jobs:
   detect:
@@ -163,6 +168,7 @@ jobs:
       coverage: ${{ inputs.coverage }}
       coverage-directories: "${{ matrix.project }}/src,${{ matrix.project }}/ext"
       cache: ${{ inputs.cache }}
+      auto-precompile: ${{ inputs.auto-precompile }}
     secrets: "inherit"
 
   test-2:
@@ -187,6 +193,7 @@ jobs:
       coverage: ${{ inputs.coverage }}
       coverage-directories: "${{ matrix.project }}/src,${{ matrix.project }}/ext"
       cache: ${{ inputs.cache }}
+      auto-precompile: ${{ inputs.auto-precompile }}
     secrets: "inherit"
 
   test-3:
@@ -211,6 +218,7 @@ jobs:
       coverage: ${{ inputs.coverage }}
       coverage-directories: "${{ matrix.project }}/src,${{ matrix.project }}/ext"
       cache: ${{ inputs.cache }}
+      auto-precompile: ${{ inputs.auto-precompile }}
     secrets: "inherit"
 
   test-4:
@@ -235,4 +243,5 @@ jobs:
       coverage: ${{ inputs.coverage }}
       coverage-directories: "${{ matrix.project }}/src,${{ matrix.project }}/ext"
       cache: ${{ inputs.cache }}
+      auto-precompile: ${{ inputs.auto-precompile }}
     secrets: "inherit"

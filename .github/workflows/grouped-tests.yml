@@ -74,6 +74,11 @@ on:
         default: false
         required: false
         type: boolean
+      auto-precompile:
+        description: "Value of JULIA_PKG_PRECOMPILE_AUTO for each test job (true -> 1, false -> 0). Set false for packages whose dependency tree OOMs the runner during Pkg's eager parallel precompilation."
+        default: true
+        required: false
+        type: boolean
 
 jobs:
   detect:
@@ -123,4 +128,5 @@ jobs:
       apt-packages: "${{ inputs.apt-packages }}"
       container: "${{ inputs.container }}"
       cache: ${{ inputs.cache }}
+      auto-precompile: ${{ inputs.auto-precompile }}
     secrets: "inherit"

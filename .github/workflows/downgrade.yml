@@ -122,6 +122,19 @@ jobs:
           echo "Effective downgrade skip: $effective"
           echo "EFFECTIVE_SKIP=$effective" >> "$GITHUB_ENV"
 
+      - name: "Save project metadata for QA"
+        if: "${{ inputs.group == 'QA' }}"
+        shell: bash
+        run: |
+          save_dir="$RUNNER_TEMP/sciml-downgrade-original-projects"
+          mkdir -p "$save_dir"
+          IFS=',' read -ra dirs <<< "${{ inputs.projects }}"
+          for dir in "${dirs[@]}"; do
+              dir="$(echo "$dir" | xargs)"
+              [ -f "$dir/Project.toml" ] || continue
+              cp --parents "$dir/Project.toml" "$save_dir"
+          done
+
       - uses: julia-actions/julia-downgrade-compat@v2
         with:
           skip: "${{ env.EFFECTIVE_SKIP }}"
@@ -138,6 +151,16 @@ jobs:
       - uses: julia-actions/julia-buildpkg@v1
         with:
           project: "${{ inputs.project }}"
+
+      - name: "Restore project metadata before QA"
+        if: "${{ inputs.group == 'QA' }}"
+        shell: bash
+        run: |
+          save_dir="$RUNNER_TEMP/sciml-downgrade-original-projects"
+          while IFS= read -r -d '' saved; do
+              relative="${saved#"$save_dir/"}"
+              cp "$saved" "$relative"
+          done < <(find "$save_dir" -name Project.toml -print0)
 
       - uses: julia-actions/julia-runtest@v1
         with:

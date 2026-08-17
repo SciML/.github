@@ -146,10 +146,7 @@ jobs:
         if: "${{ inputs.project == '@.' }}"
         shell: bash
         run: |
-          # A combined downgrade resolution writes the same merged manifest to
-          # every project directory. Pkg.test from the root project must resolve
-          # its test project against the root manifest, not merge two fixed
-          # manifests with potentially incompatible project metadata.
+          # Keep Pkg.test from merging two fixed manifests after combined resolution.
           save_dir="$RUNNER_TEMP/sciml-downgrade-secondary-manifests"
           mkdir -p "$save_dir"
           IFS=',' read -ra dirs <<< "${{ inputs.projects }}"

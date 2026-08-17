@@ -142,6 +142,27 @@ jobs:
           mode: "${{ inputs.mode != '' && inputs.mode || 'deps' }}"
           no_promote: "${{ inputs.no_promote }}"
 
+      - name: "Remove secondary manifests before root test"
+        if: "${{ inputs.project == '@.' }}"
+        shell: bash
+        run: |
+          # A combined downgrade resolution writes the same merged manifest to
+          # every project directory. Pkg.test from the root project must resolve
+          # its test project against the root manifest, not merge two fixed
+          # manifests with potentially incompatible project metadata.
+          save_dir="$RUNNER_TEMP/sciml-downgrade-secondary-manifests"
+          mkdir -p "$save_dir"
+          IFS=',' read -ra dirs <<< "${{ inputs.projects }}"
+          for dir in "${dirs[@]}"; do
+              dir="$(echo "$dir" | xargs)"
+              [ -n "$dir" ] || continue
+              [ "$dir" = "." ] && continue
+              manifest="$dir/Manifest.toml"
+              [ -f "$manifest" ] || continue
+              mkdir -p "$save_dir/$dir"
+              mv "$manifest" "$save_dir/$manifest"
+          done
+
       - name: "Install system packages"
         if: "${{ inputs.apt-packages != '' && runner.os == 'Linux' }}"
         run: |

@@ -27,7 +27,7 @@ on:
         required: false
         type: string
       upstream-subdirs:
-        description: "Comma-separated package paths in the calling repository to develop"
+        description: "Comma-separated package paths or directory globs ending in /* in the calling repository to develop"
         default: "."
         required: false
         type: string
@@ -113,9 +113,22 @@ jobs:
             error("No downstream Project.toml at $downstream_project")
           Pkg.activate(downstream_project)
           @info "Selected downstream project" downstream_project
-          upstream_projects = filter(!isempty, strip.(split(ENV["UPSTREAM_SUBDIRS"], ',')))
+          upstream_specs = filter(!isempty, strip.(split(ENV["UPSTREAM_SUBDIRS"], ',')))
+          upstream_projects = String[]
+          for spec in upstream_specs
+            if endswith(spec, "/*")
+              matches = filter(
+                project -> isfile(joinpath(project, "Project.toml")),
+                readdir(dirname(spec); join=true),
+              )
+              isempty(matches) && error("No upstream package projects matched $spec")
+              append!(upstream_projects, matches)
+            else
+              push!(upstream_projects, spec)
+            end
+          end
           isempty(upstream_projects) && error("No upstream package projects selected")
-          upstream_projects = normpath.(upstream_projects)
+          upstream_projects = unique(normpath.(upstream_projects))
           for project in upstream_projects
             isfile(joinpath(project, "Project.toml")) ||
               error("No upstream Project.toml at $project")

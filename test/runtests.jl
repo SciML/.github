@@ -486,6 +486,8 @@ end
     @test occursin("split(ENV[\"UPSTREAM_SUBDIRS\"], ',')", txt)
     @test occursin("isfile(joinpath(project, \"Project.toml\"))", txt)
     @test occursin("Pkg.develop(map(project -> PackageSpec(path=project), upstream_projects))", txt)
+    @test occursin("endswith(spec, \"/*\")", txt)
+    @test occursin("readdir(dirname(spec); join=true)", txt)
 
     activate_at = findfirst("Pkg.activate(downstream_project)", txt)
     develop_at = findfirst("Pkg.develop(map(project -> PackageSpec(path=project), upstream_projects))", txt)

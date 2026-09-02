@@ -61,6 +61,14 @@ jobs:
     name: "Build and Deploy Documentation"
     continue-on-error: ${{ inputs.continue-on-error || inputs.julia-version == 'nightly' }}
     runs-on: ${{ inputs.runner != '' && fromJson(inputs.runner) || (inputs.self-hosted && 'self-hosted' || inputs.os) }}
+    env:
+      # Whether this run has credentials that can actually push to gh-pages. GitHub issues a
+      # read-only GITHUB_TOKEN, and withholds secrets such as DOCUMENTER_KEY, for pull
+      # requests opened from a fork and for every Dependabot-triggered run.
+      CAN_DEPLOY_DOCS: >-
+        ${{ github.event_name != 'pull_request'
+            || (github.event.pull_request.head.repo.full_name == github.repository
+                && github.actor != 'dependabot[bot]') }}
     steps:
       - uses: actions/checkout@v7
 
@@ -79,8 +87,15 @@ jobs:
 
       - name: "Build and Deploy Documentation"
         env:
-          GITHUB_TOKEN: ${{ inputs.github-token || secrets.GITHUB_TOKEN }}
-          DOCUMENTER_KEY: ${{ inputs.documenter-key || secrets.DOCUMENTER_KEY }}
+          # Documenter decides it can deploy when GITHUB_TOKEN or DOCUMENTER_KEY is merely
+          # non-empty (`auth_ok` in Documenter's `deploy_folder`). A read-only token still
+          # looks non-empty, so with `push_preview = true` Documenter builds the docs, tries
+          # to push the preview, and the job fails on `403` — after the documentation has
+          # already built successfully. Passing empty values when we cannot deploy makes
+          # Documenter report `Deploying: ✗` and exit 0, so a fork or Dependabot pull request
+          # still reports whether the documentation *builds*, which is all it can verify.
+          GITHUB_TOKEN: ${{ env.CAN_DEPLOY_DOCS == 'true' && (inputs.github-token || secrets.GITHUB_TOKEN) || '' }}
+          DOCUMENTER_KEY: ${{ env.CAN_DEPLOY_DOCS == 'true' && (inputs.documenter-key || secrets.DOCUMENTER_KEY) || '' }}
         run: ${{ inputs.debug-documenter && 'JULIA_DEBUG="Documenter"' || '' }} julia --color=yes --project=docs/ ${{ inputs.coverage && '--code-coverage=user' || '' }} docs/make.jl
 
       - name: "Filter coverage directories to those that exist"

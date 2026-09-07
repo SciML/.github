@@ -629,3 +629,23 @@ end
     subs = wf("sublibrary-project-tests.yml")
     @test count("auto-precompile: \${{ inputs.auto-precompile }}", subs) == 4
 end
+
+@testset "sublibrary downgrade restores project metadata for QA" begin
+    txt = read(
+        joinpath(@__DIR__, "..", ".github", "workflows", "sublibrary-downgrade.yml"),
+        String,
+    )
+    save_at = findfirst("Save project metadata for QA", txt)
+    downgrade_at = findfirst("julia-actions/julia-downgrade-compat@v2", txt)
+    build_at = findfirst("julia-actions/julia-buildpkg@v1", txt)
+    restore_at = findfirst("Restore project metadata before QA", txt)
+    test_at = findfirst("julia-actions/julia-runtest@v1", txt)
+    positions = (save_at, downgrade_at, build_at, restore_at, test_at)
+
+    @test all(!isnothing, positions)
+    if all(!isnothing, positions)
+        @test first(save_at) < first(downgrade_at) < first(build_at) < first(restore_at) <
+            first(test_at)
+    end
+    @test count("if: \"\${{ inputs.group-env-value == 'QA' }}\"", txt) == 2
+end

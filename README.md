@@ -583,10 +583,41 @@ Per-group fields:
 | `versions` | — | Julia versions to run this group on. |
 | `runner` | `"ubuntu-latest"` | `runs-on` string or label array (e.g. a GPU self-hosted runner). |
 | `os` | — | *(Root matrix only.)* Array of OS runners for an **OS matrix** — the group runs once per OS (e.g. `["ubuntu-latest","windows-latest","macos-latest"]`), each cell's `runs-on` being that OS. Empty → use `runner`. Don't combine with a custom `runner`; if both are set, the OS axis wins. |
+| `arch` | — | *(Root matrix only.)* String or list of Julia CPU architectures. The group runs once per arch; empty (the default) means the runner's native arch. Forwarded to `tests.yml` as `julia-arch`. Use `"x86"` for a 32-bit Linux lane (requires the i386 runtime step already in `tests.yml@v1`). |
+| `group` | section name | *(Root matrix only.)* `GROUP` env value dispatched to `runtests.jl`, defaulting to the section name. Lets a section named e.g. `"Core 32-bit"` dispatch the `"Core"` body — so SciMLTesting folder discovery resolves under `test/Core/` — while carrying its own `arch`/`os` axis and CI job name. |
 | `timeout` | `120` | Job timeout in minutes. |
 | `num_threads` | `1` | `JULIA_NUM_THREADS`. |
 | `local_only` | `false` | When `true`, skip this group if the sublibrary is in the matrix only because an upstream dependency changed (not its own files). For groups too expensive to run on every transitive rebuild. *(Sublibrary matrix only; not meaningful at the root.)* |
 | `continue_on_error` | `false` | When `true`, a failing job in this group doesn't fail the run (maps to `tests.yml`'s `continue-on-error`). Used for non-fatal root groups such as OrdinaryDiffEq's `Downstream`. |
+
+#### 32-bit testing (per-repo opt-in)
+
+Shared infrastructure for 32-bit CI lives here (`arch` axis in
+`grouped-tests.yml`, i386 libs before `setup-julia` in `tests.yml`). Enabling it
+is **per-repo**: add a matrix-only alias section to that package's
+`test/test_groups.toml`. Do not auto-enable from this repo — packages must opt
+in so broken Int32 paths and CI cost stay intentional.
+
+```toml
+[Core]
+versions = ["lts", "1", "pre"]
+os = ["ubuntu-latest", "macos-latest", "windows-latest"]
+
+# Matrix-only alias: same Core body (GROUP=Core), one x86 Julia on Linux.
+["Core 32-bit"]
+group = "Core"
+versions = ["1"]
+os = ["ubuntu-latest"]
+arch = "x86"
+
+[QA]
+versions = ["lts", "1"]
+```
+
+Requirements: pin the caller at `grouped-tests.yml@v1` (or newer), and if the
+package uses SciMLTesting folder discovery (`run_tests()`), use SciMLTesting
+≥ 2.2 so the alias section is skipped under `GROUP=All`. Reference consumer:
+[FindFirstFunctions.jl](https://github.com/SciML/FindFirstFunctions.jl).
 
 **Default when there's no `test_groups.toml`:** for a sublibrary, `Core` on
 `["lts","1","pre"]` + `QA` on `["lts","1"]`; for the **root** matrix

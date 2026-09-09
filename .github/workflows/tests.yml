@@ -144,7 +144,9 @@ jobs:
         # the i386 dynamic loader and C/C++ runtime. setup-julia invokes julia
         # during its own step, so these must be installed BEFORE it — otherwise
         # the run fails with `spawn .../x86/bin/julia ENOENT` (missing loader).
-        if: "${{ (inputs.julia-arch == 'x86' || inputs.julia-arch == 'i686') && runner.os == 'Linux' }}"
+        # Skip inside job containers: many images lack passwordless sudo (e.g.
+        # FEniCS), and multiarch packages must be baked into the image instead.
+        if: "${{ (inputs.julia-arch == 'x86' || inputs.julia-arch == 'i686') && runner.os == 'Linux' && inputs.container == '' }}"
         run: |
           sudo dpkg --add-architecture i386
           sudo apt-get update

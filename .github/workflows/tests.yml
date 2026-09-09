@@ -150,6 +150,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libc6:i386 libstdc++6:i386 libgcc-s1:i386 libatomic1:i386
+          # LibGit2 on i686 Julia fails URL [sources] clones with
+          # `failed to stat '/etc/gitconfig'` when the system file is absent.
+          sudo touch /etc/gitconfig
+          # Stale/partial clone dirs from a prior attempt also break Pkg.add.
+          rm -rf "${JULIA_DEPOT_PATH:-$HOME/.julia}/clones" 2>/dev/null || true
+          rm -rf "$HOME/.julia/clones" 2>/dev/null || true
 
       - name: "Setup Julia ${{ inputs.julia-version }}"
         uses: julia-actions/setup-julia@v3

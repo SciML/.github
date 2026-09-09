@@ -110,7 +110,7 @@ jobs:
       matrix:
         include: ${{ fromJson(needs.detect.outputs.matrix) }}
     name: "${{ matrix.group }} (julia ${{ matrix.version }}, ${{ join(matrix.runner, ' ') }}${{ matrix.arch != '' && format(', {0}', matrix.arch) || '' }})"
-    uses: "SciML/.github/.github/workflows/tests.yml@v1"
+    uses: "ChrisRackauckas-Claude/.github/.github/workflows/tests.yml@fix-forward-dotgithub-ref-default-master"
     with:
       project: "."
       group: "${{ matrix.group }}"

@@ -57,8 +57,8 @@ on:
         required: false
         type: boolean
       dotgithub-ref:
-        description: "Ref of SciML/.github to source the affected-sublibrary detection script from"
-        default: "v1"
+        description: "Ref of SciML/.github to source detection + develop_sources scripts from. Default master so LTS picks up URL+[sources] Pkg.add (#136) before the floating v1 tag is bumped."
+        default: "master"
         required: false
         type: string
       cache:
@@ -169,6 +169,7 @@ jobs:
       coverage-directories: "${{ matrix.project }}/src,${{ matrix.project }}/ext"
       cache: ${{ inputs.cache }}
       auto-precompile: ${{ inputs.auto-precompile }}
+      dotgithub-ref: "${{ inputs.dotgithub-ref }}"
     secrets: "inherit"
 
   test-2:
@@ -194,6 +195,7 @@ jobs:
       coverage-directories: "${{ matrix.project }}/src,${{ matrix.project }}/ext"
       cache: ${{ inputs.cache }}
       auto-precompile: ${{ inputs.auto-precompile }}
+      dotgithub-ref: "${{ inputs.dotgithub-ref }}"
     secrets: "inherit"
 
   test-3:
@@ -219,6 +221,7 @@ jobs:
       coverage-directories: "${{ matrix.project }}/src,${{ matrix.project }}/ext"
       cache: ${{ inputs.cache }}
       auto-precompile: ${{ inputs.auto-precompile }}
+      dotgithub-ref: "${{ inputs.dotgithub-ref }}"
     secrets: "inherit"
 
   test-4:
@@ -244,4 +247,5 @@ jobs:
       coverage-directories: "${{ matrix.project }}/src,${{ matrix.project }}/ext"
       cache: ${{ inputs.cache }}
       auto-precompile: ${{ inputs.auto-precompile }}
+      dotgithub-ref: "${{ inputs.dotgithub-ref }}"
     secrets: "inherit"

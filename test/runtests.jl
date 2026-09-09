@@ -610,6 +610,21 @@ end
     @test isempty(collect_source_paths(joinpath(root, "Leaf")))
 end
 
+@testset "dotgithub-ref forwarded to tests.yml and defaults to master" begin
+    wf(p) = read(joinpath(@__DIR__, "..", ".github", "workflows", p), String)
+
+    for p in ("tests.yml", "grouped-tests.yml", "sublibrary-project-tests.yml")
+        txt = wf(p)
+        @test occursin(r"dotgithub-ref:\s*\n\s*description:.*\n\s*default: \"master\"", txt)
+    end
+
+    grouped = wf("grouped-tests.yml")
+    @test occursin("dotgithub-ref: \"\${{ inputs.dotgithub-ref }}\"", grouped)
+
+    subs = wf("sublibrary-project-tests.yml")
+    @test count("dotgithub-ref: \"\${{ inputs.dotgithub-ref }}\"", subs) == 4
+end
+
 @testset "auto-precompile input is plumbed to JULIA_PKG_PRECOMPILE_AUTO" begin
     wf(p) = read(joinpath(@__DIR__, "..", ".github", "workflows", p), String)
 

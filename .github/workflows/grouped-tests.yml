@@ -65,8 +65,8 @@ on:
         required: false
         type: string
       dotgithub-ref:
-        description: "Ref of SciML/.github to source the matrix-computation script from"
-        default: "v1"
+        description: "Ref of SciML/.github to source matrix + develop_sources scripts from. Default master so LTS picks up URL+[sources] Pkg.add (#136) before the floating v1 tag is bumped."
+        default: "master"
         required: false
         type: string
       cache:
@@ -129,4 +129,5 @@ jobs:
       container: "${{ inputs.container }}"
       cache: ${{ inputs.cache }}
       auto-precompile: ${{ inputs.auto-precompile }}
+      dotgithub-ref: "${{ inputs.dotgithub-ref }}"
     secrets: "inherit"

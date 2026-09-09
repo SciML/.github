@@ -112,8 +112,8 @@ on:
         required: false
         type: boolean
       dotgithub-ref:
-        description: "Ref of SciML/.github to source the develop-sources helper script from"
-        default: "v1"
+        description: "Ref of SciML/.github to source the develop-sources helper script from. Default master so LTS picks up URL+[sources] Pkg.add (#136) before the floating v1 tag is bumped."
+        default: "master"
         required: false
         type: string
 

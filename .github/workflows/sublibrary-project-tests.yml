@@ -154,7 +154,7 @@ jobs:
       matrix:
         include: ${{ fromJson(needs.detect.outputs.shard_1) }}
     name: "${{ matrix.project }}${{ matrix.group != 'Core' && format(' [{0}]', matrix.group) || '' }} / Julia ${{ matrix.version }}"
-    uses: "ChrisRackauckas-Claude/.github/.github/workflows/tests.yml@fix-forward-dotgithub-ref-default-master"
+    uses: "SciML/.github/.github/workflows/tests.yml@master"
     with:
       project: "${{ matrix.project }}"
       group: "${{ matrix.group }}"
@@ -180,7 +180,7 @@ jobs:
       matrix:
         include: ${{ fromJson(needs.detect.outputs.shard_2) }}
     name: "${{ matrix.project }}${{ matrix.group != 'Core' && format(' [{0}]', matrix.group) || '' }} / Julia ${{ matrix.version }}"
-    uses: "ChrisRackauckas-Claude/.github/.github/workflows/tests.yml@fix-forward-dotgithub-ref-default-master"
+    uses: "SciML/.github/.github/workflows/tests.yml@master"
     with:
       project: "${{ matrix.project }}"
       group: "${{ matrix.group }}"
@@ -206,7 +206,7 @@ jobs:
       matrix:
         include: ${{ fromJson(needs.detect.outputs.shard_3) }}
     name: "${{ matrix.project }}${{ matrix.group != 'Core' && format(' [{0}]', matrix.group) || '' }} / Julia ${{ matrix.version }}"
-    uses: "ChrisRackauckas-Claude/.github/.github/workflows/tests.yml@fix-forward-dotgithub-ref-default-master"
+    uses: "SciML/.github/.github/workflows/tests.yml@master"
     with:
       project: "${{ matrix.project }}"
       group: "${{ matrix.group }}"
@@ -232,7 +232,7 @@ jobs:
       matrix:
         include: ${{ fromJson(needs.detect.outputs.shard_4) }}
     name: "${{ matrix.project }}${{ matrix.group != 'Core' && format(' [{0}]', matrix.group) || '' }} / Julia ${{ matrix.version }}"
-    uses: "ChrisRackauckas-Claude/.github/.github/workflows/tests.yml@fix-forward-dotgithub-ref-default-master"
+    uses: "SciML/.github/.github/workflows/tests.yml@master"
     with:
       project: "${{ matrix.project }}"
       group: "${{ matrix.group }}"

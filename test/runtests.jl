@@ -90,6 +90,13 @@ end
     @test any(s -> s.name == "UrlDep" && s.url == "https://example.com/runtime.git" && s.rev == "main", url_specs)
     @test any(s -> s.name == "TestOnlyUrl" && s.url == "https://example.com/test-only.git", url_specs)
     @test !any(s -> s.name == "NestedTestOnly", url_specs)
+
+    # Julia 1.10 Pkg.develop rejects `rev`; URL specs must be Pkg.add-ed.
+    path_specs, partitioned_urls = partition_source_specs(specs)
+    @test Set(filter(!isnothing, getfield.(path_specs, :path))) == Set(paths)
+    @test isempty(filter(s -> s.url !== nothing, path_specs))
+    @test Set(getfield.(partitioned_urls, :name)) == Set(["UrlDep", "TestOnlyUrl"])
+    @test all(s -> s.path === nothing && s.url !== nothing, partitioned_urls)
 end
 
 @testset "compute_affected_sublibraries" begin

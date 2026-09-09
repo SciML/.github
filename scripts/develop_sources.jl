@@ -1,13 +1,19 @@
 #!/usr/bin/env julia
 #
-# Develop the [sources] deps of a sub-project.
+# Develop/add the [sources] deps of a sub-project.
 #
 # On Julia < 1.11 the [sources] table is ignored when an environment is
 # resolved/built/tested, so a monorepo sublibrary (e.g. lib/<name>) that relies
 # on [sources] to pin its in-repo siblings would otherwise resolve them as
 # registered packages. This script restores the 1.11+ behavior on 1.10 (the
-# SciML LTS) by Pkg.develop-ing each `path =` or `url =` source. On Julia >=
-# 1.11 it is a no-op (the table is honored natively).
+# SciML LTS). On Julia >= 1.11 it is a no-op (the table is honored natively).
+#
+# Local `path =` sources are `Pkg.develop`-ed. Git `url =` sources (with optional
+# `rev` / `subdir`) are `Pkg.add`-ed: on Julia 1.10 `Pkg.develop` rejects `rev`
+# ("rev argument not supported by `develop`; consider using `add` instead"),
+# which previously broke LTS CI for any package that temporarily pins an
+# unreleased upstream via `[sources]` URL (e.g. JumpProcesses sourcing
+# DiffEqBase from an OrdinaryDiffEq monorepo branch).
 #
 # The walk is transitive: a developed source dep can itself declare further
 # *runtime* [sources] that must also be developed for the environment to load.
@@ -25,10 +31,10 @@
 #   include("scripts/develop_sources.jl")
 #   develop_sources(project_dir)
 #
-# `develop_sources` activates `project_dir`, computes the source specs to
-# develop via `collect_source_specs`, and Pkg.develop-s them. The pure
-# source-collection logic is split out so it can be unit-tested without mutating
-# any environment.
+# `develop_sources` activates `project_dir`, computes the source specs via
+# `collect_source_specs`, then `Pkg.develop`s path specs and `Pkg.add`s URL
+# specs. The pure source-collection logic is split out so it can be unit-tested
+# without mutating any environment.
 
 using Pkg
 
@@ -118,16 +124,38 @@ function _collect_source_paths_and_specs(proj::AbstractString)
 end
 
 """
+    partition_source_specs(specs) -> (path_specs, url_specs)
+
+Split `PackageSpec`s from `collect_source_specs` into local `path` specs
+(`Pkg.develop`) and git `url` specs (`Pkg.add`, which accepts `rev`/`subdir`
+on Julia 1.10).
+"""
+function partition_source_specs(specs)
+    path_specs = Pkg.PackageSpec[]
+    url_specs = Pkg.PackageSpec[]
+    for s in specs
+        if s.path !== nothing
+            push!(path_specs, s)
+        elseif s.url !== nothing
+            push!(url_specs, s)
+        end
+    end
+    return path_specs, url_specs
+end
+
+"""
     develop_sources(proj)
 
-Activate `proj` and, on Julia < 1.11, `Pkg.develop` its `[sources]` deps
-(see `collect_source_specs`). No-op on Julia >= 1.11.
+Activate `proj` and, on Julia < 1.11, install its `[sources]` deps (see
+`collect_source_specs`): `Pkg.develop` for `path =` entries, `Pkg.add` for
+`url =` entries. No-op on Julia >= 1.11.
 """
 function develop_sources(proj::AbstractString)
     Pkg.activate(proj)
     VERSION < v"1.11.0-DEV.0" || return nothing
-    specs = collect_source_specs(proj)
-    isempty(specs) || Pkg.develop(specs)
+    path_specs, url_specs = partition_source_specs(collect_source_specs(proj))
+    isempty(path_specs) || Pkg.develop(path_specs)
+    isempty(url_specs) || Pkg.add(url_specs)
     return nothing
 end
 

@@ -152,7 +152,13 @@ jobs:
             libc6:i386 libstdc++6:i386 libgcc-s1:i386 libatomic1:i386
           # LibGit2 on i686 Julia fails URL [sources] clones with
           # `failed to stat '/etc/gitconfig'` when the system file is absent.
-          sudo touch /etc/gitconfig
+          # Recreate explicitly (touch alone has still failed on some runners)
+          # and skip system config for the rest of the job.
+          sudo rm -f /etc/gitconfig
+          echo '# SciML i686 CI placeholder' | sudo tee /etc/gitconfig >/dev/null
+          sudo chmod 644 /etc/gitconfig
+          ls -la /etc/gitconfig
+          echo "GIT_CONFIG_NOSYSTEM=1" >> "$GITHUB_ENV"
           # Stale/partial clone dirs from a prior attempt also break Pkg.add.
           rm -rf "${JULIA_DEPOT_PATH:-$HOME/.julia}/clones" 2>/dev/null || true
           rm -rf "$HOME/.julia/clones" 2>/dev/null || true

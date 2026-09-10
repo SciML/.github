@@ -151,13 +151,19 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             libc6:i386 libstdc++6:i386 libgcc-s1:i386 libatomic1:i386
           # LibGit2 on i686 Julia fails URL [sources] clones with
-          # `failed to stat '/etc/gitconfig'` when the system file is absent.
-          # Recreate explicitly (touch alone has still failed on some runners)
-          # and skip system config for the rest of the job.
+          # `failed to stat '/etc/gitconfig'` when the system file is absent —
+          # or present but SELinux-labeled so 32-bit julia cannot stat it
+          # (`ls -la` shows a trailing '.' on the mode bits).
           sudo rm -f /etc/gitconfig
           echo '# SciML i686 CI placeholder' | sudo tee /etc/gitconfig >/dev/null
           sudo chmod 644 /etc/gitconfig
-          ls -la /etc/gitconfig
+          if command -v restorecon >/dev/null 2>&1; then
+            sudo restorecon -v /etc/gitconfig || true
+          fi
+          if command -v chcon >/dev/null 2>&1; then
+            sudo chcon -t etc_t /etc/gitconfig 2>/dev/null || true
+          fi
+          ls -laZ /etc/gitconfig 2>/dev/null || ls -la /etc/gitconfig
           echo "GIT_CONFIG_NOSYSTEM=1" >> "$GITHUB_ENV"
           # Stale/partial clone dirs from a prior attempt also break Pkg.add.
           rm -rf "${JULIA_DEPOT_PATH:-$HOME/.julia}/clones" 2>/dev/null || true
@@ -168,6 +174,43 @@ jobs:
         with:
           version: "${{ inputs.julia-version }}"
           arch: "${{ inputs.julia-arch || runner.arch }}"
+
+      - name: "Redirect LibGit2 SYSTEM config off /etc (i686)"
+        # /etc/gitconfig alone is not enough on SELinux runners: LibGit2 still
+        # errors with failed-to-stat. Point SYSTEM search at $HOME and refresh
+        # /etc immediately before any Pkg URL clone (buildpkg/runtest).
+        if: "${{ (inputs.julia-arch == 'x86' || inputs.julia-arch == 'i686') && runner.os == 'Linux' }}"
+        run: |
+          echo '# SciML i686 CI placeholder' | sudo tee /etc/gitconfig >/dev/null
+          sudo chmod 644 /etc/gitconfig
+          if command -v restorecon >/dev/null 2>&1; then
+            sudo restorecon -v /etc/gitconfig || true
+          fi
+          if command -v chcon >/dev/null 2>&1; then
+            sudo chcon -t etc_t /etc/gitconfig 2>/dev/null || true
+          fi
+          ls -laZ /etc/gitconfig 2>/dev/null || ls -la /etc/gitconfig
+          mkdir -p "$HOME/.sciml-libgit2" "$HOME/.julia/config"
+          echo '# SciML i686 LibGit2 placeholder' > "$HOME/.sciml-libgit2/gitconfig"
+          cat > "$HOME/.julia/config/startup.jl" <<'EOF'
+          try
+              using LibGit2
+              import LibGit2_jll: libgit2
+              dir = joinpath(homedir(), ".sciml-libgit2")
+              LibGit2.version()  # ensure libgit2 is initialized
+              ccall(
+                  (:git_libgit2_opts, libgit2),
+                  Cint,
+                  (Cint, Cint, Cstring),
+                  Cint(LibGit2.Consts.SET_SEARCH_PATH),
+                  Cint(LibGit2.Consts.CONFIG_LEVEL_SYSTEM),
+                  dir,
+              )
+          catch e
+              @warn "i686 LibGit2 SYSTEM config redirect failed" exception = (e, catch_backtrace())
+          end
+          EOF
+          julia --startup-file=yes -e 'using LibGit2; println("LibGit2 ", LibGit2.version(), " ready for URL sources")'
 
       - name: "Gate the pre lane to release candidates only"
         # The `pre` channel installs the latest Julia prerelease. Early alphas/

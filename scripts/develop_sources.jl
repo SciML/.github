@@ -144,6 +144,96 @@ function partition_source_specs(specs)
 end
 
 """
+    _rewrite_sources_url_to_path!(tomlpath, dep, path)
+
+Replace a single `[sources]` entry `dep = {url = ..., rev = ...}` with
+`dep = {path = "..."}` without rewriting the rest of Project.toml.
+"""
+function _rewrite_sources_url_to_path!(tomlpath::AbstractString, dep::AbstractString, path::AbstractString)
+    text = read(tomlpath, String)
+    pat = Regex("^(\\s*" * escape_string(dep) * "\\s*=\\s*)\\{[^\\}\\n]*url[^\\}\\n]*\\}", "m")
+    newtext = replace(text, pat => SubstitutionString("\\1{path = $(repr(path))}"))
+    newtext == text && error("failed to rewrite [sources] entry `$dep` in $tomlpath")
+    write(tomlpath, newtext)
+    return nothing
+end
+
+"""
+    prefetch_url_sources_with_host_git!(proj; root = joinpath(homedir(), ".julia", "sciml_i686_url_sources"))
+
+Clone every `url =` entry under `[sources]` (transitively) with the runner's
+host `git` CLI and rewrite those entries to `path =` pointing at the clones.
+
+Used on i686 CI where LibGit2 HTTPS clones of URL `[sources]` can segfault in
+OpenSSL (`SSL_CTX_load_verify_file`) even after `/etc/gitconfig` workarounds.
+Mutates `Project.toml` files on disk in the runner workspace only.
+"""
+function prefetch_url_sources_with_host_git!(
+        proj::AbstractString;
+        root::AbstractString = joinpath(homedir(), ".julia", "sciml_i686_url_sources"),
+    )
+    projroot = normpath(abspath(proj == "@." ? "." : proj))
+    mkpath(root)
+    queue = String[projroot]
+    seen_dirs = Set{String}([projroot])
+    seen_clone_keys = Set{String}()
+    clones = Dict{String, String}()
+    while !isempty(queue)
+        dir = popfirst!(queue)
+        tomlpath = joinpath(dir, "Project.toml")
+        isfile(tomlpath) || continue
+        toml = Pkg.TOML.parsefile(tomlpath)
+        sources = get(toml, "sources", nothing)
+        sources isa AbstractDict || continue
+        isroot = normpath(abspath(dir)) == projroot
+        runtimedeps = keys(get(toml, "deps", Dict{String, Any}()))
+        for (dep0, spec) in sources
+            dep = String(dep0)
+            isroot || dep in runtimedeps || continue
+            spec isa AbstractDict || continue
+            if haskey(spec, "path")
+                p = normpath(abspath(joinpath(dir, String(spec["path"]))))
+                if isdir(p) && !(p in seen_dirs)
+                    push!(seen_dirs, p)
+                    push!(queue, p)
+                end
+                continue
+            end
+            haskey(spec, "url") || continue
+            url = String(spec["url"])
+            rev = String(get(spec, "rev", "HEAD"))
+            key = "$url#$rev"
+            if !haskey(clones, key)
+                dest = joinpath(
+                    root,
+                    replace(dep, r"[^\w.-]" => "_") * "_" * string(hash(key) % 0xffffff, base = 16),
+                )
+                if !isdir(joinpath(dest, ".git"))
+                    rm(dest; force = true, recursive = true)
+                    @info "i686: host-git clone of URL [sources]" package = dep url rev dest
+                    run(`git clone --filter=blob:none --no-checkout $(url) $(dest)`)
+                    run(`git -C $(dest) fetch --depth 1 origin $(rev)`)
+                    run(`git -C $(dest) checkout --force FETCH_HEAD`)
+                end
+                clones[key] = dest
+            end
+            dest = clones[key]
+            subdir = get(spec, "subdir", nothing)
+            path = subdir === nothing ? dest : joinpath(dest, String(subdir))
+            isdir(path) || error("URL source path missing after host-git clone: $path")
+            _rewrite_sources_url_to_path!(tomlpath, dep, path)
+            @info "i686: rewrote [sources] $dep -> path" path tomlpath
+            if !(path in seen_dirs)
+                push!(seen_dirs, path)
+                push!(queue, path)  # nested URL [sources] inside the clone
+            end
+            push!(seen_clone_keys, key)
+        end
+    end
+    return nothing
+end
+
+"""
     develop_sources(proj)
 
 Activate `proj` and, on Julia < 1.11, install its `[sources]` deps (see

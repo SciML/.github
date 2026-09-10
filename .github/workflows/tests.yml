@@ -244,12 +244,15 @@ jobs:
         with:
           token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - name: "Checkout SciML/.github for the develop-sources helper"
-        if: "${{ inputs.buildpkg && inputs.project != '@.' && steps.prerelease-gate.outputs.run != 'false' }}"
+      - name: "Checkout .github scripts for develop/prefetch helpers"
+        # On the consumable tip, scripts must come from the same fork/branch as
+        # this workflow — SciML/.github@master does not yet include the i686
+        # host-git URL [sources] prefetch (#137).
+        if: "${{ inputs.buildpkg && steps.prerelease-gate.outputs.run != 'false' }}"
         uses: actions/checkout@v7
         with:
-          repository: SciML/.github
-          ref: "${{ inputs.dotgithub-ref }}"
+          repository: ChrisRackauckas-Claude/.github
+          ref: fix-forward-dotgithub-ref-default-master
           path: .sciml-dotgithub
 
       - name: "Develop in-repo [sources] path deps of ${{ inputs.project }}"
@@ -274,6 +277,17 @@ jobs:
           # GITHUB_WORKSPACE so it resolves regardless of the script's location.
           include(joinpath(ENV["GITHUB_WORKSPACE"], ".sciml-dotgithub", "scripts", "develop_sources.jl"))
           develop_sources(raw"${{ inputs.project }}")
+
+      - name: "Prefetch URL [sources] with host git (i686)"
+        # LibGit2 HTTPS clones can segfault in OpenSSL on i686 Julia even when
+        # /etc/gitconfig is present. Clone with the runner's 64-bit git and
+        # rewrite [sources] url→path so buildpkg/runtest never LibGit2-fetches.
+        if: "${{ (inputs.julia-arch == 'x86' || inputs.julia-arch == 'i686') && runner.os == 'Linux' && inputs.buildpkg && steps.prerelease-gate.outputs.run != 'false' }}"
+        shell: julia --color=yes {0}
+        run: |
+          include(joinpath(ENV["GITHUB_WORKSPACE"], ".sciml-dotgithub", "scripts", "develop_sources.jl"))
+          proj = raw"${{ inputs.project }}"
+          prefetch_url_sources_with_host_git!(proj == "@." ? "." : proj)
 
       - name: "Install system packages"
         if: "${{ inputs.apt-packages != '' && runner.os == 'Linux' && steps.prerelease-gate.outputs.run != 'false' }}"

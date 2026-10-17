@@ -52,3 +52,26 @@ jobs:
       - uses: actions/checkout@v7
       - name: "Run resolver tests"
         run: python3 -m unittest discover -s test -p 'test_resolve_monorepo_tagbot.py' -v
+
+  workflow-group-tests:
+    name: "Test group (${{ matrix.os }}, ${{ matrix.group-env-name }})"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            group-env-name: GROUP
+          - os: windows-latest
+            group-env-name: GROUP
+          - os: windows-latest
+            group-env-name: SCIML_WORKFLOW_TEST_GROUP
+    uses: ./.github/workflows/tests.yml
+    with:
+      julia-version: "1"
+      os: ${{ matrix.os }}
+      group: Core
+      group-env-name: ${{ matrix.group-env-name }}
+      project: test/fixtures/WorkflowGroupProbe
+      num-threads: "1"
+      buildpkg: false
+      coverage: false

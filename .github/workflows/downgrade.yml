@@ -76,6 +76,7 @@ jobs:
           version: "${{ inputs.julia-version }}"
 
       - name: "Compute effective downgrade skip list"
+        shell: bash
         run: |
           # Effective skip = Julia stdlibs  ∪  the caller's `skip` input (extra
           # skips). Standard libraries are always in-tree at their pinned

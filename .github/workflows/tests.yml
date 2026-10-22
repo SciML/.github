@@ -239,6 +239,7 @@ jobs:
         # name must be dynamic, which the env: map can't express, so write it to
         # $GITHUB_ENV here.
         if: "${{ steps.prerelease-gate.outputs.run != 'false' }}"
+        shell: bash
         run: echo "${{ inputs.group-env-name }}=${{ inputs.group }}" >> "$GITHUB_ENV"
 
       - name: "Run tests ${{ inputs.self-hosted && '' || format('on {0}', inputs.os) }} with Julia v${{ inputs.julia-version }}"

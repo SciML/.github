@@ -298,6 +298,8 @@ documentation (and runs doctests, with coverage).
 | `coverage` | boolean | `true` | Collect doctest coverage. |
 | `coverage-directories` | string | `"src,ext"` | Coverage dirs. |
 | `continue-on-error` | boolean | — | Don't fail the run if the job fails. |
+| `upload-artifact` | boolean | `false` | Upload `docs/build` as the workflow artifact `docs-artifact` when the build succeeds. |
+| `artifact-retention-days` | number | `3` | Days to keep that artifact (`0` = repository default). |
 
 ```yaml
 jobs:
@@ -305,6 +307,11 @@ jobs:
     uses: "SciML/.github/.github/workflows/documentation.yml@v1"
     secrets: "inherit"
 ```
+
+Pull requests from forks can't deploy a documentation preview, so the job
+only reports whether the docs build. To let reviewers download and inspect
+the rendered docs, set `upload-artifact: true`; the site then appears as
+`docs-artifact` under the run's **Artifacts**.
 
 ### `runic.yml`
 

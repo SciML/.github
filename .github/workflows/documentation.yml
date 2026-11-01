@@ -60,6 +60,16 @@ on:
         default: false
         required: false
         type: boolean
+      upload-artifact:
+        description: "Upload the built documentation (`docs/build`) as a workflow artifact named `docs-artifact` when the build succeeds, so it can be downloaded and inspected, e.g. for pull requests from forks, which cannot deploy a preview"
+        default: false
+        required: false
+        type: boolean
+      artifact-retention-days:
+        description: "Number of days to keep the documentation artifact uploaded by `upload-artifact` (0 uses the repository default)"
+        default: 3
+        required: false
+        type: number
 
 jobs:
   tests:
@@ -109,6 +119,20 @@ jobs:
           GITHUB_TOKEN: ${{ env.CAN_DEPLOY_DOCS == 'true' && (inputs.github-token || secrets.GITHUB_TOKEN) || '' }}
           DOCUMENTER_KEY: ${{ env.CAN_DEPLOY_DOCS == 'true' && inputs.use-documenter-key && (inputs.documenter-key || secrets.DOCUMENTER_KEY) || '' }}
         run: ${{ inputs.debug-documenter && 'JULIA_DEBUG="Documenter"' || '' }} julia --color=yes --project=docs/ ${{ inputs.coverage && '--code-coverage=user' || '' }} docs/make.jl
+
+      - name: "Upload Documentation as Artifact"
+        # Like every step without a status function in its `if:`, this runs only when the
+        # steps before it succeeded, so a failed build uploads nothing. Pull requests from
+        # forks cannot deploy a preview (see CAN_DEPLOY_DOCS), so this artifact is the only
+        # way to inspect their rendered documentation.
+        uses: actions/upload-artifact@v7
+        if: "${{ inputs.upload-artifact }}"
+        with:
+          name: "docs-artifact"
+          path: "docs/build"
+          retention-days: "${{ inputs.artifact-retention-days }}"
+          compression-level: 9
+          overwrite: true
 
       - name: "Filter coverage directories to those that exist"
         # julia-processcoverage hard-errors on directories that don't exist

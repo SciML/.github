@@ -58,6 +58,11 @@ on:
         default: ""
         required: false
         type: string
+      coverage:
+        description: "Run the tests with code coverage (julia-runtest's `coverage`). This workflow doesn't process or upload it, so `false` only saves test time."
+        default: true
+        required: false
+        type: boolean
 
 jobs:
   downgrade:
@@ -189,5 +194,6 @@ jobs:
           # and fails resolution (e.g. "empty intersection between X@min and project
           # compatibility latest"). Downgrade tests must keep the minimum versions.
           force_latest_compatible_version: false
+          coverage: "${{ inputs.coverage }}"
         env:
           GROUP: "${{ inputs.group }}"

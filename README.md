@@ -262,6 +262,7 @@ to catch under-specified `[compat]` lower bounds.
 | `self-hosted` / `os` | | `false` / `ubuntu-latest` | Runner selection. |
 | `apt-packages` | string | `""` | Space-separated apt packages to install before building/testing (Linux only). |
 | `container` | string | `""` | Docker container image to run the job in (e.g. `cmhyett/julia-fenics:latest` for Python-stack packages). Empty = no container. |
+| `coverage` | boolean | `true` | Run the tests with code coverage (julia-runtest's `coverage`). Nothing here processes or uploads it; `false` saves test time. |
 
 ```yaml
 jobs:

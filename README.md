@@ -467,6 +467,12 @@ out, the PR is left for a human with an explanatory comment (the job still
 succeeds — holding is a valid outcome, not a failure). No repo-level "auto-merge
 enabled" setting is required.
 
+In both public and private repositories, grant the calling job all four
+permissions shown below. GitHub validates the reusable job's permissions before
+evaluating its Dependabot actor condition. Omitting either `checks: read` or
+`statuses: read` from the caller's permissions causes a startup failure on
+every pull request.
+
 | Input | Type | Default | Description |
 |---|---|---|---|
 | `update-types` | string | `"version-update:semver-patch,version-update:semver-minor"` | Dependabot update types to auto-merge. |
@@ -481,8 +487,8 @@ on: pull_request
 permissions:
   contents: write
   pull-requests: write
-  checks: read     # only needed on private repos
-  statuses: read   # only needed on private repos
+  checks: read
+  statuses: read
 jobs:
   automerge:
     uses: "SciML/.github/.github/workflows/dependabot-automerge.yml@v1"

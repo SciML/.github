@@ -470,8 +470,9 @@ enabled" setting is required.
 In both public and private repositories, grant the calling job all four
 permissions shown below. GitHub validates the reusable job's permissions before
 evaluating its Dependabot actor condition. Omitting either `checks: read` or
-`statuses: read` from the caller's permissions causes a startup failure on
-every pull request.
+`statuses: read` from an explicit permissions map causes a startup failure on
+every pull request; a caller with no `permissions:` map inherits the
+repository's default token scopes instead.
 
 | Input | Type | Default | Description |
 |---|---|---|---|

@@ -12,7 +12,7 @@ updates:
       prefix: "ci"
     labels:
       - "dependencies"
-  - package-ecosystem: "cargo"
+  - package-ecosystem: "pip"
     directory: "/.github/typos"
     schedule:
       interval: "weekly"

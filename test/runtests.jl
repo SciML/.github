@@ -484,21 +484,19 @@ end
 
 @testset "typos major release tracking" begin
     root = joinpath(@__DIR__, "..")
-    manifest = joinpath(root, ".github", "typos", "Cargo.toml")
+    manifest = joinpath(root, ".github", "typos", "requirements.txt")
     @test isfile(manifest)
     if isfile(manifest)
-        data = TOML.parsefile(manifest)
-        @test haskey(data, "package")
-        major = get(get(data, "dependencies", Dict()), "typos-cli", "")
-        @test major isa String && occursin(r"^[1-9][0-9]*$", major)
+        requirement = strip(read(manifest, String))
+        @test occursin(r"^typos==[1-9][0-9]*\.\*$", requirement)
     end
 
     dependabot = read(joinpath(root, ".github", "dependabot.yml"), String)
-    cargo_updates = match(r"(?ms)^  - package-ecosystem: \"cargo\"\n.*?(?=^  - package-ecosystem:|\z)", dependabot)
-    @test cargo_updates !== nothing
-    if cargo_updates !== nothing
+    pip_updates = match(r"(?ms)^  - package-ecosystem: \"pip\"\n.*?(?=^  - package-ecosystem:|\z)", dependabot)
+    @test pip_updates !== nothing
+    if pip_updates !== nothing
         for setting in ("directory: \"/.github/typos\"", "versioning-strategy: increase-if-necessary")
-            @test occursin(setting, cargo_updates.match)
+            @test occursin(setting, pip_updates.match)
         end
     end
 end

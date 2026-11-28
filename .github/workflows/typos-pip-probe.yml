@@ -1,0 +1,19 @@
+name: "Typos PyPI runner probe"
+
+on:
+  push:
+    branches:
+      - agent/typos-pip-probe-01a22257
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Install the latest supported typos release"
+        shell: bash
+        run: |
+          jq --version
+          python3 -m venv "$RUNNER_TEMP/typos-pip-probe"
+          "$RUNNER_TEMP/typos-pip-probe/bin/python" -m pip --isolated install \
+            --upgrade --no-cache-dir --only-binary=:all: --index-url https://pypi.org/simple 'typos==1.*'
+          "$RUNNER_TEMP/typos-pip-probe/bin/typos" --version

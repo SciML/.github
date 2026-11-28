@@ -341,8 +341,10 @@ comments. Inputs: `directory` (`"."`), `julia-version` (`"1"`),
 
 ### `spellcheck.yml`
 
-Spell-checks the repo with [`crate-ci/typos`](https://github.com/crate-ci/typos).
-No inputs.
+Spell-checks the repo with [`crate-ci/typos`](https://github.com/crate-ci/typos),
+installing the latest non-yanked stable release within the supported major from
+PyPI in an isolated environment. Automatic updates and major-version proposals
+depend on upstream publishing releases to PyPI. No inputs.
 
 ```yaml
 jobs:
@@ -353,6 +355,8 @@ jobs:
 
 > Don't carry a `typos` ignore/version pin in each repo — the shared workflow
 > tracks a current `typos`, so you get fixes and dictionary updates centrally.
+
+Dependabot tracks the `typos` major version in `.github/typos/requirements.txt`.
 
 ### `benchmark.yml`
 

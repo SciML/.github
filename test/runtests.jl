@@ -482,6 +482,25 @@ end
     end
 end
 
+@testset "typos major release tracking" begin
+    root = joinpath(@__DIR__, "..")
+    manifest = joinpath(root, ".github", "typos", "requirements.txt")
+    @test isfile(manifest)
+    if isfile(manifest)
+        requirement = strip(read(manifest, String))
+        @test occursin(r"^typos==[1-9][0-9]*\.\*$", requirement)
+    end
+
+    dependabot = read(joinpath(root, ".github", "dependabot.yml"), String)
+    pip_updates = match(r"(?ms)^  - package-ecosystem: \"pip\"\n.*?(?=^  - package-ecosystem:|\z)", dependabot)
+    @test pip_updates !== nothing
+    if pip_updates !== nothing
+        for setting in ("directory: \"/.github/typos\"", "versioning-strategy: increase-if-necessary")
+            @test occursin(setting, pip_updates.match)
+        end
+    end
+end
+
 @testset "downstream.yml selects a monorepo package project" begin
     txt = read(joinpath(@__DIR__, "..", ".github", "workflows", "downstream.yml"), String)
     @test occursin("subdir:", txt)

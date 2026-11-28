@@ -12,3 +12,12 @@ updates:
       prefix: "ci"
     labels:
       - "dependencies"
+  - package-ecosystem: "pip"
+    directory: "/.github/typos"
+    schedule:
+      interval: "weekly"
+    versioning-strategy: increase-if-necessary
+    commit-message:
+      prefix: "ci"
+    labels:
+      - "dependencies"

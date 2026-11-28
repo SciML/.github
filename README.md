@@ -354,6 +354,8 @@ jobs:
 > Don't carry a `typos` ignore/version pin in each repo — the shared workflow
 > tracks a current `typos`, so you get fixes and dictionary updates centrally.
 
+Dependabot tracks the `typos` major version in `.github/typos/requirements.txt`.
+
 ### `benchmark.yml`
 
 Runs benchmarks (via [AirspeedVelocity.jl](https://github.com/MilesCranmer/AirspeedVelocity.jl))

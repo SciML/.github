@@ -29,6 +29,11 @@ name: "Reusable Grouped Tests Workflow (test_groups.toml)"
 on:
   workflow_call:
     inputs:
+      linux-x86-pocl-workers:
+        description: "Maximum PoCL CPU workers for 32-bit Linux Julia. Zero uses the existing configuration."
+        default: 0
+        required: false
+        type: number
       group-env-name:
         description: "Environment variable name the package's runtests.jl reads its group from (default GROUP)"
         default: "GROUP"
@@ -120,6 +125,7 @@ jobs:
       runner: ${{ toJson(matrix.runner) }}
       timeout-minutes: ${{ matrix.timeout }}
       num-threads: "${{ matrix.num_threads }}"
+      linux-x86-pocl-workers: ${{ inputs.linux-x86-pocl-workers }}
       continue-on-error: ${{ matrix.continue_on_error }}
       check-bounds: "${{ inputs.check-bounds }}"
       allow-reresolve: ${{ inputs.allow-reresolve }}

@@ -1,0 +1,2 @@
+module WorkflowGroupProbe
+end

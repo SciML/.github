@@ -98,6 +98,7 @@ jobs:
         run: julia --color=yes --project=docs/ -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
 
       - name: "Build and Deploy Documentation"
+        shell: bash
         env:
           # Documenter decides it can deploy when GITHUB_TOKEN or DOCUMENTER_KEY is merely
           # non-empty (`auth_ok` in Documenter's `deploy_folder`). A read-only token still

@@ -647,6 +647,27 @@ end
     @test isempty(collect_source_paths(joinpath(root, "Leaf")))
 end
 
+@testset "downgrade coverage input reaches julia-runtest" begin
+    workflow = read(joinpath(@__DIR__, "..", ".github", "workflows", "downgrade.yml"), String)
+    inputs = match(r"(?ms)^on:\n  workflow_call:\n    inputs:\n(.*?)(?=^[^ \n]|\z)", workflow)
+    @test inputs !== nothing
+    if inputs !== nothing
+        coverage = match(r"(?m)^      coverage:\n((?:^        .*\n)+)", inputs.captures[1])
+        @test coverage !== nothing
+        if coverage !== nothing
+            for setting in ("default: true", "required: false", "type: boolean")
+                @test occursin(Regex("(?m)^        " * setting * "\\s*\$"), coverage.captures[1])
+            end
+        end
+    end
+
+    runtest = match(r"(?ms)^      - uses: julia-actions/julia-runtest@v1\n        with:\n(.*?)(?=^        [^ ]|^      - |\z)", workflow)
+    @test runtest !== nothing
+    if runtest !== nothing
+        @test occursin(r"(?m)^          coverage: [\"']?\$\{\{ inputs\.coverage \}\}[\"']?\s*$", runtest.captures[1])
+    end
+end
+
 @testset "auto-precompile input is plumbed to JULIA_PKG_PRECOMPILE_AUTO" begin
     wf(p) = read(joinpath(@__DIR__, "..", ".github", "workflows", p), String)
 

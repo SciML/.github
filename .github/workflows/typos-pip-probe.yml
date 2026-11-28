@@ -1,4 +1,4 @@
-name: "Typos PyPI runner probe"
+name: "Reusable spelling workflow probe"
 
 on:
   push:
@@ -6,17 +6,5 @@ on:
       - agent/typos-pip-probe-01a22257
 
 jobs:
-  install:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.12"
-      - name: "Install the latest supported typos release"
-        shell: bash
-        run: |
-          jq --version
-          python3 -m venv "$RUNNER_TEMP/typos-pip-probe"
-          "$RUNNER_TEMP/typos-pip-probe/bin/python" -m pip --isolated install \
-            --upgrade --no-cache-dir --only-binary=:all: --index-url https://pypi.org/simple 'typos==1.*'
-          "$RUNNER_TEMP/typos-pip-probe/bin/typos" --version
+  spellcheck:
+    uses: SciML/.github/.github/workflows/spellcheck.yml@25a064d7f954e8fc3b9aae05feb2768ba483e77b

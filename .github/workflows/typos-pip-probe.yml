@@ -9,6 +9,9 @@ jobs:
   install:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
       - name: "Install the latest supported typos release"
         shell: bash
         run: |

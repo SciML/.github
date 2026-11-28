@@ -482,6 +482,27 @@ end
     end
 end
 
+@testset "typos major release tracking" begin
+    root = joinpath(@__DIR__, "..")
+    manifest = joinpath(root, ".github", "typos", "Cargo.toml")
+    @test isfile(manifest)
+    if isfile(manifest)
+        data = TOML.parsefile(manifest)
+        @test haskey(data, "package")
+        major = get(get(data, "dependencies", Dict()), "typos-cli", "")
+        @test major isa String && occursin(r"^[1-9][0-9]*$", major)
+    end
+
+    dependabot = read(joinpath(root, ".github", "dependabot.yml"), String)
+    cargo_updates = match(r"(?ms)^  - package-ecosystem: \"cargo\"\n.*?(?=^  - package-ecosystem:|\z)", dependabot)
+    @test cargo_updates !== nothing
+    if cargo_updates !== nothing
+        for setting in ("directory: \"/.github/typos\"", "versioning-strategy: increase-if-necessary")
+            @test occursin(setting, cargo_updates.match)
+        end
+    end
+end
+
 @testset "downstream.yml selects a monorepo package project" begin
     txt = read(joinpath(@__DIR__, "..", ".github", "workflows", "downstream.yml"), String)
     @test occursin("subdir:", txt)
@@ -525,6 +546,43 @@ end
     i386_at = findfirst("libc6:i386", txt)
     setup_at = findfirst("julia-actions/setup-julia", txt)
     @test i386_at !== nothing && setup_at !== nothing && first(i386_at) < first(setup_at)
+end
+
+@testset "Linux x86 PoCL worker limit" begin
+    workflows = joinpath(@__DIR__, "..", ".github", "workflows")
+    tests = read(joinpath(workflows, "tests.yml"), String)
+    grouped = read(joinpath(workflows, "grouped-tests.yml"), String)
+    input = r"(?m)^      linux-x86-pocl-workers:\n(?:        [^\n]*\n)*?        default: 0\n"
+    @test occursin(input, tests)
+    @test occursin(input, grouped)
+    @test occursin("linux-x86-pocl-workers: \${{ inputs.linux-x86-pocl-workers }}", grouped)
+
+    step = match(r"(?ms)^      - name: \"Configure PoCL workers for 32-bit Linux\"\n(.*?)^      - ", tests)
+    @test step !== nothing
+    if step !== nothing
+        @test step.offset < first(findfirst("uses: julia-actions/setup-julia", tests))
+        @test occursin("inputs.linux-x86-pocl-workers != 0 && runner.os == 'Linux'", step.match)
+        @test occursin("""contains(fromJSON('["x86", "i686"]'), inputs.julia-arch || runner.arch)""", step.match)
+        shell = last(split(step.captures[1], "        run: |\n"; limit = 2))
+        settings = ("POCL_CPU_MAX_CU_COUNT", "POCL_MAX_PTHREAD_COUNT", "POCL_MAX_COMPUTE_UNITS", "JULIA_KA_CPU_THREADS")
+        function configure(limit, overrides...)
+            return mktemp() do file, io
+                close(io)
+                env = Dict(k => v for (k, v) in ENV if k ∉ settings)
+                merge!(env, Dict("GITHUB_ENV" => file, "POCL_WORKERS" => limit), Dict(overrides...))
+                cmd = setenv(`bash -eu -c $shell`, env)
+                ok = success(pipeline(cmd; stdout = devnull, stderr = devnull))
+                return ok, read(file, String)
+            end
+        end
+        @test configure("2") == (true, "POCL_CPU_MAX_CU_COUNT=2\n")
+        for setting in settings
+            @test configure("2", setting => "5") == (true, "")
+        end
+        for invalid in ("-1", "1.5", "2147483648")
+            @test configure(invalid) == (false, "")
+        end
+    end
 end
 
 # develop_sources.jl: the [sources] develop helper used by tests.yml on Julia

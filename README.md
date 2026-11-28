@@ -148,6 +148,7 @@ tested via `project: lib/X` without a hand-written develop step.
 | `group` | string | `""` | Test group; exposed to tests via an env var (see `group-env-name`). |
 | `group-env-name` | string | `"GROUP"` | Name of the env var the group is set under (e.g. `ODEDIFFEQ_TEST_GROUP`). |
 | `num-threads` | string | `"auto"` | `JULIA_NUM_THREADS`. `auto` matches the runner's vCPUs on hosted runners; on self-hosted it falls back to `2` (avoid oversubscribing a large shared box). An explicit integer is always honored. |
+| `linux-x86-pocl-workers` | number | `0` | Maximum worker count for the PoCL CPU driver on 32-bit Linux Julia. A positive count sets `POCL_CPU_MAX_CU_COUNT` before Julia starts when the runner has no explicit PoCL worker limit or `JULIA_KA_CPU_THREADS` setting. Zero uses the existing configuration. |
 | `self-hosted` | boolean | `false` | Run on a self-hosted runner. |
 | `os` | string | `"ubuntu-latest"` | Runner OS (ignored when self-hosted). |
 | `runner` | string | `""` | JSON-encoded `runs-on` (string or label array, e.g. `'["self-hosted","Linux","X64","gpu"]'`). When non-empty, overrides `self-hosted`/`os`. |
@@ -712,6 +713,7 @@ a near-zero-line `CI.yml`, and can split into groups later.
 | Input | Type | Default | Description |
 |---|---|---|---|
 | `group-env-name` | string | `"GROUP"` | Env var the package's `runtests.jl` reads its group from (OrdinaryDiffEq uses `ODEDIFFEQ_TEST_GROUP`). |
+| `linux-x86-pocl-workers` | number | `0` | PoCL CPU worker limit forwarded to `tests.yml` for 32-bit Linux Julia. |
 | `check-bounds` | string | `"yes"` | `julia-runtest` `check_bounds` per group. |
 | `allow-reresolve` | boolean | `true` | `julia-runtest` `allow_reresolve`. |
 | `coverage` | boolean | `true` | Collect & upload coverage. |

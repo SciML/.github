@@ -6,7 +6,7 @@ name: "Reusable Dependabot Auto-merge Workflow"
 #
 # Why not a bare `gh pr merge --auto`: native auto-merge only waits on the
 # checks that branch protection marks *required*, and merges immediately if
-# none are required (or if the required set is stale / mis-named). That lets a
+# none are required (or if the required set is stale / misnamed). That lets a
 # red or still-running PR fast-track when a repo's required-status-checks config
 # is missing or out of date. This workflow instead gates on ALL checks that
 # actually ran on the head commit, so the gate holds regardless of branch
@@ -14,10 +14,8 @@ name: "Reusable Dependabot Auto-merge Workflow"
 # times out, the PR is left for a human with an explanatory comment (the job
 # still succeeds — holding is a valid outcome).
 #
-# The caller triggers on pull_request and must grant contents + pull-requests
-# write. `checks: read` + `statuses: read` are used to inspect CI; reads work
-# without an explicit grant on public repos, but private repos should also
-# grant those two scopes on the caller job.
+# The pull_request caller must grant contents and pull-requests write access
+# plus checks and statuses read access in both public and private repositories.
 
 on:
   workflow_call:

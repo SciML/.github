@@ -148,6 +148,7 @@ tested via `project: lib/X` without a hand-written develop step.
 | `group` | string | `""` | Test group; exposed to tests via an env var (see `group-env-name`). |
 | `group-env-name` | string | `"GROUP"` | Name of the env var the group is set under (e.g. `ODEDIFFEQ_TEST_GROUP`). |
 | `num-threads` | string | `"auto"` | `JULIA_NUM_THREADS`. `auto` matches the runner's vCPUs on hosted runners; on self-hosted it falls back to `2` (avoid oversubscribing a large shared box). An explicit integer is always honored. |
+| `linux-x86-pocl-workers` | number | `0` | Maximum worker count for the PoCL CPU driver on 32-bit Linux Julia. A positive count sets `POCL_CPU_MAX_CU_COUNT` before Julia starts when the runner has no explicit PoCL worker limit or `JULIA_KA_CPU_THREADS` setting. Zero uses the existing configuration. |
 | `self-hosted` | boolean | `false` | Run on a self-hosted runner. |
 | `os` | string | `"ubuntu-latest"` | Runner OS (ignored when self-hosted). |
 | `runner` | string | `""` | JSON-encoded `runs-on` (string or label array, e.g. `'["self-hosted","Linux","X64","gpu"]'`). When non-empty, overrides `self-hosted`/`os`. |
@@ -491,6 +492,13 @@ out, the PR is left for a human with an explanatory comment (the job still
 succeeds — holding is a valid outcome, not a failure). No repo-level "auto-merge
 enabled" setting is required.
 
+In both public and private repositories, grant the calling job all four
+permissions shown below. GitHub validates the reusable job's permissions before
+evaluating its Dependabot actor condition. Omitting either `checks: read` or
+`statuses: read` from an explicit permissions map causes a startup failure on
+every pull request; a caller with no `permissions:` map inherits the
+repository's default token scopes instead.
+
 | Input | Type | Default | Description |
 |---|---|---|---|
 | `update-types` | string | `"version-update:semver-patch,version-update:semver-minor"` | Dependabot update types to auto-merge. |
@@ -505,8 +513,8 @@ on: pull_request
 permissions:
   contents: write
   pull-requests: write
-  checks: read     # only needed on private repos
-  statuses: read   # only needed on private repos
+  checks: read
+  statuses: read
 jobs:
   automerge:
     uses: "SciML/.github/.github/workflows/dependabot-automerge.yml@v1"
@@ -729,6 +737,7 @@ a near-zero-line `CI.yml`, and can split into groups later.
 | Input | Type | Default | Description |
 |---|---|---|---|
 | `group-env-name` | string | `"GROUP"` | Env var the package's `runtests.jl` reads its group from (OrdinaryDiffEq uses `ODEDIFFEQ_TEST_GROUP`). |
+| `linux-x86-pocl-workers` | number | `0` | PoCL CPU worker limit forwarded to `tests.yml` for 32-bit Linux Julia. |
 | `check-bounds` | string | `"yes"` | `julia-runtest` `check_bounds` per group. |
 | `allow-reresolve` | boolean | `true` | `julia-runtest` `allow_reresolve`. |
 | `coverage` | boolean | `true` | Collect & upload coverage. |

@@ -27,6 +27,11 @@ on:
         default: "auto"
         required: false
         type: string
+      linux-x86-pocl-workers:
+        description: "Maximum PoCL CPU workers for 32-bit Linux Julia. Zero uses the existing configuration."
+        default: 0
+        required: false
+        type: number
       self-hosted:
         description: "Run the job needs on a self hosted machine"
         default: false
@@ -138,6 +143,25 @@ jobs:
       JULIA_PKG_PRECOMPILE_AUTO: "${{ inputs.auto-precompile && '1' || '0' }}"
     steps:
       - uses: actions/checkout@v7
+
+      - name: "Configure PoCL workers for 32-bit Linux"
+        if: >-
+          ${{ inputs.linux-x86-pocl-workers != 0 && runner.os == 'Linux' &&
+              contains(fromJSON('["x86", "i686"]'), inputs.julia-arch || runner.arch) }}
+        shell: bash
+        env:
+          POCL_WORKERS: ${{ inputs.linux-x86-pocl-workers }}
+        run: |
+          if [[ ! $POCL_WORKERS =~ ^[1-9][0-9]{0,9}$ ]] || (( POCL_WORKERS > 2147483647 )); then
+            echo "::error::linux-x86-pocl-workers must be a positive 32-bit integer or zero to opt out."
+            exit 1
+          fi
+          for setting in POCL_CPU_MAX_CU_COUNT POCL_MAX_PTHREAD_COUNT POCL_MAX_COMPUTE_UNITS JULIA_KA_CPU_THREADS; do
+            if printenv "$setting" >/dev/null; then
+              exit 0
+            fi
+          done
+          printf 'POCL_CPU_MAX_CU_COUNT=%s\n' "$POCL_WORKERS" >> "$GITHUB_ENV"
 
       - name: "Install 32-bit runtime libraries (i386)"
         # A 32-bit (i686) Julia cannot exec on the 64-bit Linux runners without

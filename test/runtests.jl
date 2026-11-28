@@ -34,6 +34,109 @@ function make_fixture(; c_groups::Union{Nothing, String} = nothing)
     return root
 end
 
+@testset "spellcheck installer and annotations" begin
+    root = joinpath(@__DIR__, "..")
+    requirement = strip(read(joinpath(root, ".github", "typos", "requirements.txt"), String))
+    workflow = read(joinpath(root, ".github", "workflows", "spellcheck.yml"), String)
+    installer = match(r"(?ms)^      - name: \"Install typos\"\n.*?^        run: \|\n(.*?)(?=^      - |\z)", workflow)
+    @test installer !== nothing
+    if installer !== nothing
+        shell = replace(installer.captures[1], r"(?m)^ {10}" => "")
+        script = match(r"(?ms)^python3 -I - <<'PY'\n(.*?)^PY$", shell)
+        @test script !== nothing
+        if script !== nothing
+            declared = match(r"(?m)^MAJOR = ([1-9][0-9]*)$", script.captures[1])
+            specified = match(r"^typos==([1-9][0-9]*)\.\*$", requirement)
+            @test declared !== nothing && specified !== nothing && declared.captures[1] == specified.captures[1]
+            driver = raw"""
+            import subprocess, sys
+            scope = {"__name__": "test_only"}
+            exec(sys.stdin.read(), scope)
+            files = [
+                {"filename": "typos-1.9.0.tar.gz", "yanked": False},
+                {"filename": "typos-1.10.0-py3-none-any.whl", "yanked": False, "requires-python": ">=999"},
+                {"filename": "typos-1.10.0.zip", "yanked": False},
+                {"filename": "typos-1.11.0.tar.gz", "yanked": ""},
+                {"filename": "typos-1.12.0rc1.tar.gz", "yanked": False},
+                {"filename": "typos-2.0.0.tar.gz", "yanked": False},
+                {"filename": "typos-2.0.0.zip", "yanked": False},
+            ]
+            latest = scope["latest_release"](files, 1)
+            assert latest == "1.10.0", latest
+            calls = []
+            def fail_on_latest(command, check):
+                calls.append(command)
+                if command[-1] == "typos==1.10.0":
+                    raise subprocess.CalledProcessError(42, command)
+            assert scope["install_latest"]("python", latest, fail_on_latest) == 42
+            assert len(calls) == 1 and calls[0][-1] == "typos==1.10.0", calls
+            for version in ("1.12.0.post1", "1.053.0", "1.52.3.", "01.53.0"):
+                try:
+                    scope["latest_release"]([
+                        {"filename": "typos-1.52.2.tar.gz", "yanked": False},
+                        {"filename": f"typos-{version}.tar.gz", "yanked": False},
+                    ], 1)
+                except ValueError:
+                    pass
+                else:
+                    raise AssertionError(f"unknown version {version} must fail closed")
+            """
+            out = IOBuffer()
+            err = IOBuffer()
+            process = run(pipeline(ignorestatus(`python3 -I -c $driver`); stdin = IOBuffer(script.captures[1]), stdout = out, stderr = err))
+            @test process.exitcode == 0
+        end
+    end
+    @test occursin("--no-cache-dir", workflow) && occursin("--only-binary=:all:", workflow)
+    @test occursin("uses: actions/setup-python@v6", workflow)
+    @test !occursin("crate-ci/typos@", workflow)
+
+    step = match(r"(?ms)^      - name: \"Check spelling\"\n.*?^        run: \|\n(.*?)(?=^      - |\z)", workflow)
+    @test step !== nothing
+    if step !== nothing
+        shell = replace(step.captures[1], r"(?m)^ {10}" => "")
+        mktempdir() do dir
+            bin = joinpath(dir, "sciml-typos", "bin")
+            mkpath(bin)
+            executable = joinpath(bin, "typos")
+            write(
+                executable, raw"""#!/usr/bin/env bash
+                if [[ "$1" == "--format" ]]; then
+                  if [[ "$SCENARIO" == "error" ]]; then exit 7; fi
+                  if [[ "$SCENARIO" == "invalid" ]]; then echo invalid; exit 2; fi
+                  if [[ "$SCENARIO" == "typo" ]]; then
+                    printf '%s\n' '{"type":"typo","path":"./a,b:c%.jl","line_num":1,"byte_offset":8,"typo":"oops%","corrections":["the"]}'
+                    exit 2
+                  fi
+                  exit 0
+                fi
+                if [[ "$SCENARIO" == "typo" ]]; then echo 'spellcheck failed'; exit 2; fi
+                exit 0
+                """
+            )
+            chmod(executable, 0o755)
+            function check(scenario)
+                out = IOBuffer()
+                err = IOBuffer()
+                cmd = addenv(`bash -c $shell`, "PATH" => dir * ":" * ENV["PATH"], "TYPOS" => executable, "SCENARIO" => scenario)
+                process = run(pipeline(ignorestatus(cmd); stdout = out, stderr = err))
+                return process.exitcode, String(take!(out)), String(take!(err))
+            end
+            code, output, _ = check("typo")
+            @test code == 2
+            @test occursin("::warning file=a%2Cb%3Ac%25.jl,line=1,col=9::", output)
+            @test occursin("oops%25", output)
+            @test occursin("spellcheck failed", output)
+            code, output, _ = check("clean")
+            @test code == 0 && isempty(output)
+            code, _, _ = check("error")
+            @test code == 7
+            code, _, _ = check("invalid")
+            @test code != 0
+        end
+    end
+end
+
 @testset "develop_sources: path and URL source collection" begin
     root = mktempdir()
     localdep = joinpath(root, "lib", "LocalDep")
@@ -482,6 +585,25 @@ end
     end
 end
 
+@testset "typos major release tracking" begin
+    root = joinpath(@__DIR__, "..")
+    manifest = joinpath(root, ".github", "typos", "requirements.txt")
+    @test isfile(manifest)
+    if isfile(manifest)
+        requirement = strip(read(manifest, String))
+        @test occursin(r"^typos==[1-9][0-9]*\.\*$", requirement)
+    end
+
+    dependabot = read(joinpath(root, ".github", "dependabot.yml"), String)
+    pip_updates = match(r"(?ms)^  - package-ecosystem: \"pip\"\n.*?(?=^  - package-ecosystem:|\z)", dependabot)
+    @test pip_updates !== nothing
+    if pip_updates !== nothing
+        for setting in ("directory: \"/.github/typos\"", "versioning-strategy: increase-if-necessary")
+            @test occursin(setting, pip_updates.match)
+        end
+    end
+end
+
 @testset "downstream.yml selects a monorepo package project" begin
     txt = read(joinpath(@__DIR__, "..", ".github", "workflows", "downstream.yml"), String)
     @test occursin("subdir:", txt)
@@ -525,6 +647,43 @@ end
     i386_at = findfirst("libc6:i386", txt)
     setup_at = findfirst("julia-actions/setup-julia", txt)
     @test i386_at !== nothing && setup_at !== nothing && first(i386_at) < first(setup_at)
+end
+
+@testset "Linux x86 PoCL worker limit" begin
+    workflows = joinpath(@__DIR__, "..", ".github", "workflows")
+    tests = read(joinpath(workflows, "tests.yml"), String)
+    grouped = read(joinpath(workflows, "grouped-tests.yml"), String)
+    input = r"(?m)^      linux-x86-pocl-workers:\n(?:        [^\n]*\n)*?        default: 0\n"
+    @test occursin(input, tests)
+    @test occursin(input, grouped)
+    @test occursin("linux-x86-pocl-workers: \${{ inputs.linux-x86-pocl-workers }}", grouped)
+
+    step = match(r"(?ms)^      - name: \"Configure PoCL workers for 32-bit Linux\"\n(.*?)^      - ", tests)
+    @test step !== nothing
+    if step !== nothing
+        @test step.offset < first(findfirst("uses: julia-actions/setup-julia", tests))
+        @test occursin("inputs.linux-x86-pocl-workers != 0 && runner.os == 'Linux'", step.match)
+        @test occursin("""contains(fromJSON('["x86", "i686"]'), inputs.julia-arch || runner.arch)""", step.match)
+        shell = last(split(step.captures[1], "        run: |\n"; limit = 2))
+        settings = ("POCL_CPU_MAX_CU_COUNT", "POCL_MAX_PTHREAD_COUNT", "POCL_MAX_COMPUTE_UNITS", "JULIA_KA_CPU_THREADS")
+        function configure(limit, overrides...)
+            return mktemp() do file, io
+                close(io)
+                env = Dict(k => v for (k, v) in ENV if k ∉ settings)
+                merge!(env, Dict("GITHUB_ENV" => file, "POCL_WORKERS" => limit), Dict(overrides...))
+                cmd = setenv(`bash -eu -c $shell`, env)
+                ok = success(pipeline(cmd; stdout = devnull, stderr = devnull))
+                return ok, read(file, String)
+            end
+        end
+        @test configure("2") == (true, "POCL_CPU_MAX_CU_COUNT=2\n")
+        for setting in settings
+            @test configure("2", setting => "5") == (true, "")
+        end
+        for invalid in ("-1", "1.5", "2147483648")
+            @test configure(invalid) == (false, "")
+        end
+    end
 end
 
 # develop_sources.jl: the [sources] develop helper used by tests.yml on Julia

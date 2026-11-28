@@ -1,0 +1,11 @@
+name = "WorkflowArtifactProbe"
+uuid = "5675859d-9f50-4cf8-8b4f-333328632069"
+version = "0.1.0"
+
+[extras]
+Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+TOML = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
+
+[targets]
+test = ["Pkg", "Test", "TOML"]

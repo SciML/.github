@@ -1,0 +1,48 @@
+name: "Documentation artifact probe"
+
+on:
+  push:
+    branches:
+      - agent/docs-artifact-probe-01a22257
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+  statuses: write
+
+jobs:
+  upload:
+    strategy:
+      fail-fast: false
+      matrix:
+        julia: ["1", "1.11"]
+    uses: isaacsas/SciML-dotgithub/.github/workflows/documentation.yml@a4e3532eedb5b2ba74515660feca8c1c5152bbf3
+    with:
+      julia-version: "${{ matrix.julia }}"
+      os: ubuntu-latest
+      coverage: false
+      upload-artifact: true
+      artifact-name: "docs-${{ matrix.julia }}"
+
+  missing-output:
+    uses: isaacsas/SciML-dotgithub/.github/workflows/documentation.yml@a4e3532eedb5b2ba74515660feca8c1c5152bbf3
+    with:
+      julia-version: "1.10"
+      os: ubuntu-latest
+      coverage: false
+      upload-artifact: true
+      artifact-name: docs-missing
+
+  verify:
+    needs: upload
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: docs-*
+          path: downloaded
+      - name: "Check both downloaded sites"
+        run: |
+          test "$(cat downloaded/docs-1/index.html)" = 'documentation fixture'
+          test "$(cat downloaded/docs-1.11/index.html)" = 'documentation fixture'

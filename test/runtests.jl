@@ -656,3 +656,27 @@ end
     end
     @test count("if: \"\${{ inputs.group-env-value == 'QA' }}\"", txt) == 2
 end
+
+@testset "documentation artifact upload contract" begin
+    txt = read(joinpath(@__DIR__, "..", ".github", "workflows", "documentation.yml"), String)
+    block(pattern) = (m = match(pattern, txt); isnothing(m) ? "" : m.match)
+    upload_input = block(r"(?ms)^      upload-artifact:\n.*?(?=^      [\w-]+:|^jobs:)")
+    name = block(r"(?ms)^      artifact-name:\n.*?(?=^      [\w-]+:|^jobs:)")
+    upload = block(r"(?ms)^      - name: \"Upload Documentation as Artifact\"\n.*?(?=^      - |\z)")
+
+    @test occursin(r"(?m)^        default: false$", upload_input)
+    @test occursin(r"(?m)^        type: boolean$", upload_input)
+    @test occursin(r"(?m)^        default: \"docs-artifact\"$", name)
+    @test occursin(r"(?m)^        type: string$", name)
+    @test occursin(raw"if: \"${{ inputs.upload-artifact }}\"", upload)
+    @test occursin(raw"name: \"${{ inputs.artifact-name }}\"", upload)
+    @test occursin("path: \"docs/build\"", upload)
+    @test occursin("if-no-files-found: error", upload)
+    @test !occursin(r"(?m)^\s*overwrite:", upload)
+    build_at = findfirst("      - name: \"Build and Deploy Documentation\"", txt)
+    upload_at = findfirst("      - name: \"Upload Documentation as Artifact\"", txt)
+    @test !isnothing(build_at) && !isnothing(upload_at)
+    if !isnothing(build_at) && !isnothing(upload_at)
+        @test first(build_at) < first(upload_at)
+    end
+end

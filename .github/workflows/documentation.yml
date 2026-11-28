@@ -61,10 +61,15 @@ on:
         required: false
         type: boolean
       upload-artifact:
-        description: "Upload the built documentation (`docs/build`) as a workflow artifact named `docs-artifact` when the build succeeds, so it can be downloaded and inspected, e.g. for pull requests from forks, which cannot deploy a preview"
+        description: "Upload the built documentation (`docs/build`) as a workflow artifact when the build succeeds"
         default: false
         required: false
         type: boolean
+      artifact-name:
+        description: "Name of the documentation artifact"
+        default: "docs-artifact"
+        required: false
+        type: string
       artifact-retention-days:
         description: "Number of days to keep the documentation artifact uploaded by `upload-artifact` (0 uses the repository default)"
         default: 3
@@ -128,11 +133,11 @@ jobs:
         uses: actions/upload-artifact@v7
         if: "${{ inputs.upload-artifact }}"
         with:
-          name: "docs-artifact"
+          name: "${{ inputs.artifact-name }}"
           path: "docs/build"
+          if-no-files-found: error
           retention-days: "${{ inputs.artifact-retention-days }}"
           compression-level: 9
-          overwrite: true
 
       - name: "Filter coverage directories to those that exist"
         # julia-processcoverage hard-errors on directories that don't exist

@@ -298,7 +298,8 @@ documentation (and runs doctests, with coverage).
 | `coverage` | boolean | `true` | Collect doctest coverage. |
 | `coverage-directories` | string | `"src,ext"` | Coverage dirs. |
 | `continue-on-error` | boolean | — | Don't fail the run if the job fails. |
-| `upload-artifact` | boolean | `false` | Upload `docs/build` as the workflow artifact `docs-artifact` when the build succeeds. |
+| `upload-artifact` | boolean | `false` | Upload `docs/build` as a workflow artifact when the build succeeds. |
+| `artifact-name` | string | `"docs-artifact"` | Name of the documentation artifact. |
 | `artifact-retention-days` | number | `3` | Days to keep that artifact (`0` = repository default). |
 
 ```yaml
@@ -311,7 +312,23 @@ jobs:
 Pull requests from forks can't deploy a documentation preview, so the job
 only reports whether the docs build. To let reviewers download and inspect
 the rendered docs, set `upload-artifact: true`; the site then appears as
-`docs-artifact` under the run's **Artifacts**.
+`docs-artifact` under the run's **Artifacts**. The build must produce files in
+`docs/build`; the upload fails if that directory has no files. When multiple
+documentation jobs run together, give each artifact a distinct name:
+
+```yaml
+jobs:
+  docs:
+    strategy:
+      matrix:
+        julia: ["1", "lts"]
+    uses: "SciML/.github/.github/workflows/documentation.yml@v1"
+    secrets: "inherit"
+    with:
+      julia-version: ${{ matrix.julia }}
+      upload-artifact: true
+      artifact-name: docs-${{ matrix.julia }}
+```
 
 ### `runic.yml`
 

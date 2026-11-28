@@ -503,8 +503,12 @@ group from `test_groups.toml` and schedules it on the GPU runner.
 Every workflow in `.github/workflows/` is a **thin caller** that delegates to a
 reusable workflow in `SciML/.github` at `@v1`, with `secrets: "inherit"`. Do not
 inline build/test steps, permissions, or matrices that a reusable workflow
-already owns. The target set (the whole fleet, including OrdinaryDiffEq, is being
-converted to these thin-caller forms):
+already owns. The exception is `permissions:` — a reusable job cannot elevate
+its caller's token, and an explicitly enumerated map downgrades every omitted
+scope to `none`, so a caller that writes a map must still list every scope the
+reusable job requests (see the TagBot and DependabotAutoMerge callers below).
+The target set (the whole fleet, including OrdinaryDiffEq, is being converted
+to these thin-caller forms):
 
 ### `SublibraryCI.yml` → `sublibrary-project-tests.yml@v1`
 
@@ -687,7 +691,19 @@ is unnecessary when there is only one package to scan. See the
 
 ### `DependabotAutoMerge.yml` → `dependabot-automerge.yml@v1`
 
+Keep the caller permissions shown below — the same elevation rule as TagBot
+applies, and omitting `checks: read` or `statuses: read` rejects the workflow
+before any job is created.
+
 ```yaml
+# .github/workflows/DependabotAutoMerge.yml
+name: Dependabot Auto-merge
+on: pull_request
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+  statuses: read
 jobs:
   automerge:
     uses: "SciML/.github/.github/workflows/dependabot-automerge.yml@v1"
